@@ -2,100 +2,146 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TV Arşiv - Full Screen</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart TV Portal - Premium</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        /* Ekranın hiçbir yerinde boşluk kalmaması için */
-        html, body { 
-            margin: 0; 
-            padding: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: #000; 
-            overflow: hidden; 
-            font-family: Arial, sans-serif;
+        /* Temel Stil Ayarları */
+        :root {
+            --bg-color: #0a0a0a;
+            --card-bg: #181818;
+            --accent-color: #e50914; /* Netflix Kırmızısı */
+            --text-color: #ffffff;
+            --focus-border: #ffffff;
         }
 
-        h1 { color: white; padding: 20px; margin: 0; font-size: 24px; border-bottom: 2px solid #e50914; }
-
-        .grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-            gap: 20px; 
-            padding: 20px; 
-            box-sizing: border-box;
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            overflow-x: hidden;
         }
 
-        .card { 
-            background: #141414; 
-            border-radius: 8px; 
-            border: 4px solid transparent; 
-            cursor: pointer; 
-            color: white;
-            transition: 0.2s;
+        header {
+            margin-bottom: 30px;
+            border-left: 5px solid var(--accent-color);
+            padding-left: 15px;
         }
 
-        /* Kumanda ile üzerine gelince yanan çerçeve */
-        .card:focus { 
-            border-color: #fff; 
-            transform: scale(1.05); 
-            outline: none; 
+        header h1 {
+            font-size: 28px;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
-        .card-img { height: 140px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 50px; color: #e50914; }
-        .card-title { padding: 10px; font-weight: bold; text-align: center; }
-
-        /* VİDEO OYNATICI - TÜM EKRANI KAPLAR */
-        #player { 
-            display: none; 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100vw; 
-            height: 100vh; 
-            background: black; 
-            z-index: 9999; 
+        /* 6'lı Izgara Sistemi */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr); /* Tam yan yana 6 adet */
+            gap: 15px;
+            width: 100%;
         }
 
-        /* Iframe'i ekranın her köşesine zorla yayar */
-        iframe { 
-            position: absolute;
+        /* Kart Tasarımı */
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            outline: none; /* Standart focus'u kaldır */
+        }
+
+        /* TV Kumanda Odağı (Focus) */
+        .card:focus {
+            transform: scale(1.1);
+            border-color: var(--focus-border);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        /* Kart Görsel Alanı (YouTube Önizleme Hissi) */
+        .card-preview {
+            height: 120px;
+            background: linear-gradient(45deg, #222, #333);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .card-preview::after {
+            content: '▶';
+            font-size: 40px;
+            color: rgba(255,255,255,0.3);
+        }
+
+        /* Kart Başlığı */
+        .card-body {
+            padding: 12px;
+            background: var(--card-bg);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Uzun başlıkları keser */
+            text-align: center;
+        }
+
+        /* Oynatıcı (Player) */
+        #player-overlay {
+            display: none;
+            position: fixed;
             top: 0;
             left: 0;
-            width: 100% !important; 
-            height: 100% !important; 
-            border: none; 
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 9999;
         }
 
-        /* Kapat butonu - TV'de görünmesi için sağ üste belirgin koyduk */
-        .back-btn { 
-            position: absolute; 
-            top: 15px; 
-            right: 15px; 
-            background: rgba(229, 9, 20, 0.8); 
-            color: white; 
-            padding: 10px 20px; 
-            border-radius: 5px; 
-            border: none; 
-            font-size: 16px; 
-            font-weight: bold; 
-            z-index: 10000; 
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            background: var(--accent-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            border: none;
+            font-weight: bold;
             cursor: pointer;
+            z-index: 10000;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
 
-    <div id="ui-wrapper">
-        <h1>VİDEO ARŞİVİ</h1>
-        <div class="grid" id="video-list">Yükleniyor...</div>
-    </div>
+    <header>
+        <h1>Video Arşivi</h1>
+    </header>
 
-    <div id="player">
-        <button class="back-btn" onclick="closePlayer()">GERİ DÖN (Kapat)</button>
-        <div id="video-content" style="width:100%; height:100%;"></div>
+    <div class="grid" id="main-list">
+        </div>
+
+    <div id="player-overlay">
+        <button class="close-btn" onclick="stopVideo()">✕ KAPAT (GERİ)</button>
+        <div id="video-target" style="width:100%; height:100%;"></div>
     </div>
 
     <script>
@@ -106,48 +152,55 @@
         };
         firebase.initializeApp(config);
 
-        firebase.database().ref('videolar').on('value', (snapshot) => {
-            const list = document.getElementById('video-list');
+        // Firebase'den Verileri Gerçek Zamanlı Dinle
+        firebase.database().ref('videolar').on('value', (snap) => {
+            const list = document.getElementById('main-list');
             list.innerHTML = "";
-            const data = snapshot.val();
+            const data = snap.val();
             
-            if(data) {
-                for(let id in data) {
-                    const v = data[id];
+            if (data) {
+                for (let key in data) {
+                    const video = data[key];
                     const card = document.createElement('div');
                     card.className = 'card';
-                    card.tabIndex = "0"; 
-                    card.innerHTML = `<div class="card-img">▶</div><div class="card-title">${v.title}</div>`;
-                    card.onclick = () => openPlayer(v.url);
-                    card.onkeydown = (e) => { if(e.keyCode === 13) openPlayer(v.url); };
+                    card.tabIndex = "0"; // Kumanda ile gezinebilmek için
+                    
+                    card.innerHTML = `
+                        <div class="card-preview"></div>
+                        <div class="card-body">
+                            <div class="card-title">${video.title}</div>
+                        </div>
+                    `;
+
+                    // Tıklama ve Enter Tuşu (Kumanda OK)
+                    card.onclick = () => startVideo(video.url);
+                    card.onkeydown = (e) => { if (e.keyCode === 13) startVideo(video.url); };
+                    
                     list.appendChild(card);
                 }
             } else {
-                list.innerHTML = "<p style='color:white'>Video bulunamadı.</p>";
+                list.innerHTML = "<p style='grid-column: span 6; text-align:center;'>Henüz video eklenmedi.</p>";
             }
         });
 
-        function openPlayer(url) {
-            const player = document.getElementById('player');
-            const content = document.getElementById('video-content');
+        function startVideo(url) {
+            const overlay = document.getElementById('player-overlay');
+            const target = document.getElementById('video-target');
+            overlay.style.display = 'block';
             
-            player.style.display = 'block';
-            
-            // TV için en önemli ayar: iv_load_policy=3 (reklamları/bilgileri azaltır) 
-            // ve allow="autoplay; encrypted-media"
-            content.innerHTML = `<iframe 
-                src="${url}?autoplay=1&rel=0&controls=1&showinfo=0&iv_load_policy=3&fs=1" 
-                allow="autoplay; fullscreen; encrypted-media" 
-                frameborder="0"
+            // TV için tam ekran ve otomatik oynatma ayarları
+            target.innerHTML = `<iframe 
+                src="${url}?autoplay=1&rel=0&controls=1&fs=1" 
+                allow="autoplay; fullscreen" 
                 allowfullscreen></iframe>`;
             
-            // TV'nin odağını butonun üzerine alalım (Geri dönebilmek için)
-            document.querySelector('.back-btn').focus();
+            // Kapat butonuna odaklan (Geri çıkışı kolaylaştırmak için)
+            setTimeout(() => document.querySelector('.close-btn').focus(), 500);
         }
 
-        function closePlayer() {
-            document.getElementById('player').style.display = 'none';
-            document.getElementById('video-content').innerHTML = "";
+        function stopVideo() {
+            document.getElementById('player-overlay').style.display = 'none';
+            document.getElementById('video-target').innerHTML = "";
         }
     </script>
 </body>
