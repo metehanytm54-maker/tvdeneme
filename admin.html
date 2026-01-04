@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Yönetim Merkezi</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 400px; }
+        h2 { color: #2c3e50; margin-bottom: 20px; text-align: center; }
+        input { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 10px; box-sizing: border-box; font-size: 16px; transition: 0.3s; }
+        input:focus { border-color: #3498db; outline: none; }
+        button { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #2980b9; transform: translateY(-2px); }
+        #log { margin-top: 15px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Video Ekle</h2>
+        <input type="text" id="title" placeholder="Video Adı">
+        <input type="text" id="url" placeholder="YouTube URL (Kopyala/Yapıştır)">
+        <button onclick="sendData()">SİSTEME GÖNDER</button>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const config = {
+            apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
+            databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
+            projectId: "naberdeneme-ffa04"
+        };
+        firebase.initializeApp(config);
+        const db = firebase.database();
+
+        function sendData() {
+            const t = document.getElementById('title').value;
+            let u = document.getElementById('url').value;
+            const log = document.getElementById('log');
+
+            if(!t || !u) { alert("Lütfen boş bırakma!"); return; }
+
+            // YouTube linkini TV için uyumlu hale getir (Embed yap)
+            if(u.includes("watch?v=")) u = u.replace("watch?v=", "embed/");
+            if(u.includes("youtu.be/")) u = u.replace("youtu.be/", "youtube.com/embed/");
+
+            log.style.color = "blue";
+            log.innerText = "Gönderiliyor...";
+
+            db.ref('videolar').push({ title: t, url: u })
+            .then(() => {
+                log.style.color = "green";
+                log.innerText = "✅ Başarıyla Kaydedildi!";
+                document.getElementById('title').value = "";
+                document.getElementById('url').value = "";
+            })
+            .catch(err => {
+                log.style.color = "red";
+                log.innerText = "Hata: " + err.message;
+                alert("HATA: " + err.message);
+            });
+        }
+    </script>
+</body>
+</html>
