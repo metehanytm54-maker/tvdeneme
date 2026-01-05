@@ -2,30 +2,36 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>TV Portal</title>
+    <title>TV Portal - Yeni Sekme Modu</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         body { background: #0a0a0a; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
+        header { border-bottom: 2px solid #e50914; margin-bottom: 20px; padding-bottom: 10px; }
         .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
-        .card { background: #181818; border-radius: 8px; border: 3px solid transparent; cursor: pointer; transition: 0.2s; }
-        .card:focus { border-color: white; transform: scale(1.08); outline: none; }
+        .card { background: #181818; border-radius: 8px; border: 3px solid transparent; cursor: pointer; transition: 0.2s; outline: none; }
+        
+        /* Kumanda Odaklanması */
+        .card:focus { border-color: #ffffff; transform: scale(1.1); background: #222; }
+        
         .card-img { height: 120px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 40px; }
-        .card-title { padding: 10px; font-size: 14px; text-align: center; font-weight: bold; }
-        #player { display:none; position:fixed; inset:0; background:black; z-index:9999; }
-        iframe { width:100%; height:100%; border:none; }
-        .back-btn { position:absolute; top:20px; right:20px; background:red; color:white; padding:10px; border:none; z-index:10001; }
+        .card-title { padding: 10px; font-size: 14px; text-align: center; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Bilgilendirme Notu */
+        .info-note { background: #333; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 13px; color: #ccc; }
     </style>
 </head>
 <body>
 
-    <h1>Kütüphane</h1>
-    <div class="grid" id="main-list"></div>
+    <header>
+        <h1>Video Kütüphanesi</h1>
+    </header>
 
-    <div id="player">
-        <button class="back-btn" onclick="stop()">GERİ DÖN</button>
-        <div id="video-target" style="height:100%"></div>
+    <div class="info-note">
+        💡 <b>İpucu:</b> Video yeni sekmede açılacaktır. Videoyu bitirdiğinizde kumandanızın <b>"Geri" (Back)</b> tuşuna basarak bu listeye dönebilirsiniz.
     </div>
+
+    <div class="grid" id="main-list">Yükleniyor...</div>
 
     <script>
         const config = {
@@ -36,43 +42,60 @@
         firebase.initializeApp(config);
         const db = firebase.database();
 
+        // Videoları Listele
         db.ref('videolar').on('value', snap => {
             const list = document.getElementById('main-list');
             list.innerHTML = "";
-            snap.forEach(child => {
-                const v = child.val();
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.tabIndex = "0";
-                card.innerHTML = `<div class="card-img">${v.pin ? '🔒' : '▶'}</div><div class="card-title">${v.title}</div>`;
-                card.onclick = () => checkPin(v);
-                card.onkeydown = (e) => { if(e.keyCode === 13) checkPin(v); };
-                list.appendChild(card);
-            });
+            const data = snap.val();
+            
+            if (data) {
+                for (let key in data) {
+                    const v = data[key];
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.tabIndex = "0"; // Kumanda navigasyonu için şart
+                    
+                    card.innerHTML = `
+                        <div class="card-img">${v.pin ? '🔒' : '▶'}</div>
+                        <div class="card-title">${v.title}</div>
+                    `;
+
+                    // Tıklama veya OK tuşu işlemleri
+                    card.onclick = () => checkPin(v);
+                    card.onkeydown = (e) => { if(e.keyCode === 13) checkPin(v); };
+                    
+                    list.appendChild(card);
+                }
+            } else {
+                list.innerHTML = "Henüz video eklenmemiş.";
+            }
         });
 
         function checkPin(video) {
             if (video.pin) {
-                const userPin = prompt("Bu video şifrelidir. Şifreyi girin:");
+                const userPin = prompt("Bu video şifrelidir. PIN girin:");
                 if (userPin === video.pin) {
-                    play(video.url);
-                } else {
+                    openVideo(video.url);
+                } else if (userPin !== null) {
                     alert("Hatalı şifre!");
                 }
             } else {
-                play(video.url);
+                openVideo(video.url);
             }
         }
 
-        function play(url) {
-            document.getElementById('player').style.display = 'block';
-            document.getElementById('video-target').innerHTML = `<iframe src="${url}?autoplay=1" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-        }
+        function openVideo(url) {
+            // TV tarayıcısında yeni sekme açmak için en kararlı yöntem:
+            // Bazı TV'ler pop-up engelleyebilir, bu yüzden '_blank' yerine 
+            // pencereyi doğrudan o adrese yönlendirmek (location.href) daha sağlıklı olabilir.
+            
+            // Seçenek 1: Yeni Sekme (İstediğin yöntem)
+            window.open(url, '_blank');
 
-        function stop() {
-            document.getElementById('player').style.display = 'none';
-            document.getElementById('video-target').innerHTML = "";
+            /* Seçenek 2: Eğer yeni sekme açılmazsa aşağıdakini kullan:
+               window.location.href = url; 
+            */
         }
     </script>
 </body>
-</html>
+    </html>
