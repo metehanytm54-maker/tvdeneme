@@ -2,15 +2,20 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Pro Sync Player - Stable</title>
+    <title>Universal Pro Sync Player - Full Features</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #000; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
         
+        /* UI Gizleme Efektleri */
+        #playlist-container, .controls-bar { transition: opacity 0.5s, visibility 0.5s; opacity: 1; visibility: visible; }
+        .ui-hidden { opacity: 0 !important; visibility: hidden !important; }
+        .ui-hidden-cursor { cursor: none; }
+
         /* Playlist Alanı */
-        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; transition: transform 0.3s; }
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; transition: transform 0.3s, opacity 0.5s; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; outline: none; }
         .playlist-item:focus { border-color: #e50914; background: #222; }
         
@@ -34,10 +39,10 @@
         .controls-bar { 
             position: absolute; bottom: 0; left: 0; right: 0; 
             background: linear-gradient(transparent, rgba(0,0,0,0.95)); 
-            padding: 30px 20px; display: flex; flex-direction: column; gap: 15px; z-index: 20;
+            padding: 50px 20px 20px; display: flex; flex-direction: column; gap: 15px; z-index: 20;
         }
         .progress-container { display: flex; align-items: center; gap: 15px; }
-        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; height: 8px; }
+        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; height: 10px; }
         
         .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
         button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
@@ -61,7 +66,6 @@
 
     <div id="player-main">
         <div id="yt-shield" onclick="togglePlay()"></div>
-        
         <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
         <div id="file-layer" class="media-layer">
             <video id="mainVideo" playsinline onclick="togglePlay()"></video>
@@ -71,7 +75,7 @@
         <div class="controls-bar">
             <div class="progress-container">
                 <span id="currTime">00:00</span>
-                <input type="range" id="progressBar" value="0" min="0" step="0.1">
+                <input type="range" id="progressBar" value="0" min="0" step="0.1" oninput="manualSeek(this.value)">
                 <span id="totalTime">00:00</span>
             </div>
             <div class="bottom-controls">
@@ -97,10 +101,35 @@
         };
         firebase.initializeApp(config);
         
-        let ytPlayer, isYouTube = false, pendingVideo = null;
+        let ytPlayer, isYouTube = false, pendingVideo = null, idleTimer;
         const videoEl = document.getElementById('mainVideo');
         const audioEl = document.getElementById('bgAudio');
         const progBar = document.getElementById('progressBar');
+
+        // --- ARAYÜZ GİZLEME FONKSİYONLARI ---
+        function showUI() {
+            clearTimeout(idleTimer);
+            document.getElementById('playlist-container').classList.remove('ui-hidden');
+            document.querySelector('.controls-bar').classList.remove('ui-hidden');
+            document.body.classList.remove('ui-hidden-cursor');
+            
+            // Eğer video oynuyorsa 5 saniye sonra gizle
+            idleTimer = setTimeout(hideUI, 5000);
+        }
+
+        function hideUI() {
+            const playing = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if(playing) {
+                document.getElementById('playlist-container').classList.add('ui-hidden');
+                document.querySelector('.controls-bar').classList.add('ui-hidden');
+                document.body.classList.add('ui-hidden-cursor');
+            }
+        }
+
+        // Fare hareketini ve tıklamaları dinle
+        window.addEventListener('mousemove', showUI);
+        window.addEventListener('mousedown', showUI);
+        window.addEventListener('keydown', showUI);
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
@@ -163,16 +192,14 @@
                 document.getElementById('yt-shield').style.display = 'none';
                 document.getElementById('file-layer').style.display = 'block';
                 videoEl.src = v.v_url;
-                videoEl.play(); // Direkt oynat
+                videoEl.play();
             }
 
-            if(v.a_url) {
-                audioEl.src = v.a_url;
-                audioEl.play(); // Direkt oynat
-            } else {
-                audioEl.src = "";
-            }
+            if(v.a_url) { audioEl.src = v.a_url; audioEl.play(); } 
+            else { audioEl.src = ""; }
+            
             document.getElementById('playBtn').innerText = "⏸ DURDUR";
+            showUI(); // Başladığında arayüzü göster, sonra otomatik gizlenecek
             requestAnimationFrame(syncUI);
         }
 
@@ -182,12 +209,21 @@
                 if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
                 audioEl.pause();
                 document.getElementById('playBtn').innerText = "▶ OYNAT";
+                showUI(); // Durunca kontroller geri gelsin
             } else {
                 if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
                 if(audioEl.src) audioEl.play();
                 document.getElementById('playBtn').innerText = "⏸ DURDUR";
                 requestAnimationFrame(syncUI);
             }
+        }
+
+        // İSTENİLEN SANİYEYE ATLAMA FONKSİYONU
+        function manualSeek(val) {
+            const time = parseFloat(val);
+            if(isYouTube) ytPlayer.seekTo(time); else videoEl.currentTime = time;
+            if(audioEl.src) audioEl.currentTime = time;
+            showUI(); // Etkileşim olduğu için arayüzü canlı tut
         }
 
         function syncUI() {
@@ -219,18 +255,18 @@
             }
         }
 
-        // Diğer fonksiyonlar (Seek, Vol, Time)
         function seekRel(sec) {
             const now = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
-            if(isYouTube) ytPlayer.seekTo(now + sec); else videoEl.currentTime = now + sec;
-            if(audioEl.src) audioEl.currentTime = now + sec;
+            manualSeek(now + sec);
         }
-        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; }
-        function setAVol(v) { audioEl.volume = v/100; }
+
+        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; showUI(); }
+        function setAVol(v) { audioEl.volume = v/100; showUI(); }
+
         function formatTime(s) {
             const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
             return (m < 10 ? "0"+m : m) + ":" + (sec < 10 ? "0"+sec : sec);
         }
     </script>
 </body>
-</html>
+    </html>
