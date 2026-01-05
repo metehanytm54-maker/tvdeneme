@@ -2,105 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>TV Portal - Full Video & Mini Audio</title>
+    <title>TV Portal - Liste</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #000; color: white; margin: 0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        
-        /* Liste Tasarımı */
-        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; padding: 25px; }
-        .card { background: #181818; border: 3px solid transparent; border-radius: 12px; cursor: pointer; transition: 0.3s; }
-        .card:focus { border-color: #e50914; transform: scale(1.08); outline: none; }
-        .card-img { height: 120px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 40px; border-radius: 8px 8px 0 0; }
-        .card-title { padding: 12px; font-size: 14px; font-weight: bold; text-align: center; }
-
-        /* FULL SCREEN PLAYER UI */
-        #player-ui { display: none; position: fixed; inset: 0; background: black; z-index: 9999; }
-        
-        /* Video Arka Planı Kaplar */
-        #v-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
-        iframe { width: 100%; height: 100%; border: none; }
-
-        /* SES DOSYASI - SAĞ ALT KÖŞE PANELİ */
-        .audio-overlay { 
-            position: absolute; 
-            bottom: 30px; 
-            right: 30px; 
-            width: 220px; 
-            background: rgba(0, 0, 0, 0.8); 
-            border: 1px solid #444; 
-            border-radius: 15px; 
-            padding: 15px; 
-            display: flex; 
-            align-items: center; 
-            gap: 15px;
-            backdrop-filter: blur(5px);
-            z-index: 10001;
-        }
-        .audio-icon { font-size: 30px; }
-        .audio-text { font-size: 12px; color: #aaa; }
-        .audio-text b { color: white; display: block; font-size: 14px; }
-
-        /* KONTROL BUTONLARI */
-        .controls { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            z-index: 10002; 
-            text-align: center;
-        }
-        .btn { 
-            padding: 20px 40px; 
-            background: #e50914; 
-            color: white; 
-            border: none; 
-            border-radius: 50px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            font-size: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .close-btn {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 10003;
-        }
+        body { background: #0a0a0a; color: white; font-family: sans-serif; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
+        .card { background: #181818; border-radius: 12px; border: 3px solid transparent; cursor: pointer; transition: 0.3s; outline: none; }
+        .card:focus { border-color: #e50914; transform: scale(1.1); }
+        .card-img { height: 120px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 40px; border-radius: 12px 12px 0 0; }
+        .card-title { padding: 12px; font-size: 14px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <div id="main-ui">
-        <h1 style="padding:25px; margin:0;">Video Kütüphanesi</h1>
-        <div class="grid" id="main-list">Yükleniyor...</div>
-    </div>
-
-    <div id="player-ui">
-        <button class="close-btn" onclick="stopAll()">✕ GERİ DÖN</button>
-        
-        <div id="v-container"></div>
-
-        <div class="audio-overlay">
-            <div class="audio-icon">📻</div>
-            <div class="audio-text">
-                <b>Ses Dosyası</b>
-                <span id="audio-status">Bağlantı bekleniyor...</span>
-            </div>
-            <audio id="myAudio"></audio>
-        </div>
-
-        <div class="controls" id="btn-container">
-            <button class="btn" id="sync-start" onclick="startBoth()">SENKRONİZE BAŞLAT</button>
-        </div>
-    </div>
+    <h1>Video Kütüphanesi</h1>
+    <div class="grid" id="main-list">Yükleniyor...</div>
 
     <script>
         const config = {
@@ -109,10 +25,8 @@
             projectId: "naberdeneme-ffa04"
         };
         firebase.initializeApp(config);
-        const db = firebase.database();
 
-        // Firebase Veri Çekme
-        db.ref('videolar').on('value', snap => {
+        firebase.database().ref('videolar').on('value', snap => {
             const list = document.getElementById('main-list');
             list.innerHTML = "";
             snap.forEach(child => {
@@ -121,48 +35,18 @@
                 card.className = 'card';
                 card.tabIndex = "0";
                 card.innerHTML = `<div class="card-img">🎬</div><div class="card-title">${v.title}</div>`;
-                card.onclick = () => preparePlayer(v.v_url, v.a_url);
-                card.onkeydown = (e) => { if(e.keyCode === 13) preparePlayer(v.v_url, v.a_url); };
+                
+                // Tıklandığında player.html sayfasını yeni sekmede aç ve linkleri URL'ye ekle
+                const openFunc = () => {
+                    const playerUrl = `player.html?v=${encodeURIComponent(v.v_url)}&a=${encodeURIComponent(v.a_url)}`;
+                    window.open(playerUrl, '_blank');
+                };
+
+                card.onclick = openFunc;
+                card.onkeydown = (e) => { if(e.keyCode === 13) openFunc(); };
                 list.appendChild(card);
             });
         });
-
-        function preparePlayer(vUrl, aUrl) {
-            document.getElementById('main-ui').style.display = 'none';
-            document.getElementById('player-ui').style.display = 'block';
-            document.getElementById('btn-container').style.display = 'block';
-            
-            // Videoyu Arka Plana Yerleştir
-            document.getElementById('v-container').innerHTML = `<iframe id="ytPlayer" src="${vUrl}?enablejsapi=1&autoplay=0&controls=0&rel=0&showinfo=0" allow="autoplay"></iframe>`;
-            
-            // Sesi Hazırla
-            const audio = document.getElementById('myAudio');
-            audio.src = aUrl;
-            audio.load();
-
-            document.getElementById('audio-status').innerText = "Oynatılmaya hazır";
-            setTimeout(() => document.getElementById('sync-start').focus(), 500);
-        }
-
-        function startBoth() {
-            const audio = document.getElementById('myAudio');
-            const iframe = document.getElementById('ytPlayer');
-            
-            audio.play();
-            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-            
-            document.getElementById('audio-status').innerText = "📡 Senkronize çalıyor";
-            document.getElementById('btn-container').style.display = 'none'; // Başlayınca butonu kaldır
-        }
-
-        function stopAll() {
-            const audio = document.getElementById('myAudio');
-            audio.pause();
-            audio.currentTime = 0;
-            document.getElementById('player-ui').style.display = 'none';
-            document.getElementById('main-ui').style.display = 'block';
-            document.getElementById('v-container').innerHTML = "";
-        }
     </script>
 </body>
 </html>
