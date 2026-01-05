@@ -2,29 +2,45 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Video & Ses Yönetim</title>
+    <title>Video Yönetim Paneli</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; }
-        .box { background: white; padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .list-item { background: white; margin-top: 10px; padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-del { background: #d93025; padding: 5px 10px; font-size: 12px; }
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; }
+        .btn-save { background: #28a745; color: white; width: 100%; }
+        .btn-edit { background: #ffc107; color: black; margin-right: 5px; }
+        .btn-delete { background: #dc3545; color: white; }
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #ddd; padding: 10px; text-align: left; }
+        .password-badge { background: #eee; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h2>Yeni Kayıt</h2>
-    <input type="text" id="title" placeholder="Başlık">
-    <input type="text" id="v_url" placeholder="Video URL (YouTube)">
-    <input type="text" id="a_url" placeholder="Ses Dosyası URL (MP3)">
-    <button onclick="kaydet()">SİSTEME KAYDET</button>
-</div>
+<div class="container">
+    <h2>Video Ekle / Düzenle</h2>
+    <input type="hidden" id="editId">
+    <input type="text" id="title" placeholder="Video Başlığı (Örn: Film Adı)">
+    <input type="text" id="v_url" placeholder="Video URL (YouTube veya MP4 Linki)">
+    <input type="text" id="a_url" placeholder="Ses Dosyası URL (İsteğe Bağlı)">
+    <input type="text" id="password" placeholder="Video Şifresi (Şifresiz olması için boş bırakın)">
+    <button class="btn-save" onclick="saveData()">VERİYİ KAYDET</button>
 
-<div id="v-list" style="max-width: 500px; margin: 20px auto;"></div>
+    <h3>Kütüphane</h3>
+    <table id="videoTable">
+        <thead>
+            <tr>
+                <th>Başlık</th>
+                <th>Şifre</th>
+                <th>İşlemler</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
 
 <script>
     const config = {
@@ -35,35 +51,69 @@
     firebase.initializeApp(config);
     const db = firebase.database();
 
-    function kaydet() {
-        const title = document.getElementById('title').value;
-        let v_url = document.getElementById('v_url').value;
-        const a_url = document.getElementById('a_url').value;
+    function saveData() {
+        const id = document.getElementById('editId').value;
+        const data = {
+            title: document.getElementById('title').value,
+            v_url: document.getElementById('v_url').value,
+            a_url: document.getElementById('a_url').value || "", // Boş olabilir
+            password: document.getElementById('password').value || "" // Boş olabilir
+        };
 
-        if(!title || !v_url || !a_url) { alert("Lütfen tüm alanları doldurun!"); return; }
+        if(!data.title || !data.v_url) return alert("Başlık ve Video URL zorunludur!");
 
-        if(v_url.includes("watch?v=")) v_url = v_url.replace("watch?v=", "embed/");
-        if(v_url.includes("youtu.be/")) v_url = v_url.replace("youtu.be/", "youtube.com/embed/");
-
-        db.ref('videolar').push({ title, v_url, a_url })
-        .then(() => location.reload());
+        if(id) {
+            db.ref('videolar/' + id).set(data).then(() => resetForm());
+        } else {
+            db.ref('videolar').push(data).then(() => resetForm());
+        }
     }
 
+    function resetForm() {
+        document.getElementById('editId').value = "";
+        document.getElementById('title').value = "";
+        document.getElementById('v_url').value = "";
+        document.getElementById('a_url').value = "";
+        document.getElementById('password').value = "";
+        alert("Başarıyla kaydedildi.");
+    }
+
+    // Listeleme
     db.ref('videolar').on('value', snap => {
-        const list = document.getElementById('v-list');
-        list.innerHTML = "<h3>Kayıtlı Dosyalar</h3>";
+        const tbody = document.querySelector('#videoTable tbody');
+        tbody.innerHTML = "";
         snap.forEach(child => {
             const v = child.val();
-            list.innerHTML += `
-                <div class="list-item">
-                    <span>${v.title}</span>
-                    <button class="btn-del" onclick="sil('${child.key}')">Sil</button>
-                </div>
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${v.title}</td>
+                <td>${v.password ? '<span class="password-badge">🔒 '+v.password+'</span>' : '🔓 Yok'}</td>
+                <td>
+                    <button class="btn-edit" onclick="editData('${child.key}')">Düzenle</button>
+                    <button class="btn-delete" onclick="deleteData('${child.key}')">Sil</button>
+                </td>
             `;
+            tbody.appendChild(tr);
         });
     });
 
-    function sil(key) { if(confirm("Silinsin mi?")) db.ref('videolar').child(key).remove(); }
+    function editData(key) {
+        db.ref('videolar/' + key).once('value', snap => {
+            const v = snap.val();
+            document.getElementById('editId').value = key;
+            document.getElementById('title').value = v.title;
+            document.getElementById('v_url').value = v.v_url;
+            document.getElementById('a_url').value = v.a_url;
+            document.getElementById('password').value = v.password || "";
+            window.scrollTo(0,0);
+        });
+    }
+
+    function deleteData(key) {
+        if(confirm("Bu videoyu silmek istediğinize emin misiniz?")) {
+            db.ref('videolar/' + key).remove();
+        }
+    }
 </script>
 </body>
     </html>
