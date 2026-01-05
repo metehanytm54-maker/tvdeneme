@@ -2,17 +2,20 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Pro Sync Player - Full Features</title>
+    <title>Universal Pro Sync Player - Stable & Auto Hide</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
-        body { background: #000; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        body { background: #000; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; transition: cursor 0.3s; }
         
         /* UI Gizleme Efektleri */
         #playlist-container, .controls-bar { transition: opacity 0.5s, visibility 0.5s; opacity: 1; visibility: visible; }
-        .ui-hidden { opacity: 0 !important; visibility: hidden !important; }
-        .ui-hidden-cursor { cursor: none; }
+        
+        /* İmleç ve UI gizleme sınıfı */
+        .ui-hidden-active #playlist-container, 
+        .ui-hidden-active .controls-bar { opacity: 0 !important; visibility: hidden !important; }
+        .ui-hidden-active { cursor: none !important; }
 
         /* Playlist Alanı */
         #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; transition: transform 0.3s, opacity 0.5s; }
@@ -50,7 +53,7 @@
         audio { display: none; }
     </style>
 </head>
-<body>
+<body onmousemove="showUI()" onmousedown="showUI()" onkeydown="showUI()">
 
     <div id="password-overlay">
         <h2>🔒 Şifre Gerekli</h2>
@@ -106,30 +109,21 @@
         const audioEl = document.getElementById('bgAudio');
         const progBar = document.getElementById('progressBar');
 
-        // --- ARAYÜZ GİZLEME FONKSİYONLARI ---
+        // --- İMLEÇ VE ARAYÜZ GİZLEME MANTIĞI ---
         function showUI() {
             clearTimeout(idleTimer);
-            document.getElementById('playlist-container').classList.remove('ui-hidden');
-            document.querySelector('.controls-bar').classList.remove('ui-hidden');
-            document.body.classList.remove('ui-hidden-cursor');
+            document.body.classList.remove('ui-hidden-active');
             
-            // Eğer video oynuyorsa 5 saniye sonra gizle
-            idleTimer = setTimeout(hideUI, 5000);
-        }
-
-        function hideUI() {
+            // Sadece bir medya oynatılıyorsa otomatik gizlemeyi başlat
             const playing = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !videoEl.paused;
             if(playing) {
-                document.getElementById('playlist-container').classList.add('ui-hidden');
-                document.querySelector('.controls-bar').classList.add('ui-hidden');
-                document.body.classList.add('ui-hidden-cursor');
+                idleTimer = setTimeout(hideUI, 5000);
             }
         }
 
-        // Fare hareketini ve tıklamaları dinle
-        window.addEventListener('mousemove', showUI);
-        window.addEventListener('mousedown', showUI);
-        window.addEventListener('keydown', showUI);
+        function hideUI() {
+            document.body.classList.add('ui-hidden-active');
+        }
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
@@ -169,9 +163,7 @@
                 document.getElementById('password-overlay').style.display = 'none';
                 document.getElementById('passInput').value = "";
                 startMedia(pendingVideo);
-            } else {
-                alert("Hatalı Şifre!");
-            }
+            } else { alert("Hatalı Şifre!"); }
         }
 
         function startMedia(v) {
@@ -199,7 +191,7 @@
             else { audioEl.src = ""; }
             
             document.getElementById('playBtn').innerText = "⏸ DURDUR";
-            showUI(); // Başladığında arayüzü göster, sonra otomatik gizlenecek
+            showUI();
             requestAnimationFrame(syncUI);
         }
 
@@ -209,21 +201,21 @@
                 if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
                 audioEl.pause();
                 document.getElementById('playBtn').innerText = "▶ OYNAT";
-                showUI(); // Durunca kontroller geri gelsin
+                showUI();
             } else {
                 if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
                 if(audioEl.src) audioEl.play();
                 document.getElementById('playBtn').innerText = "⏸ DURDUR";
                 requestAnimationFrame(syncUI);
+                showUI();
             }
         }
 
-        // İSTENİLEN SANİYEYE ATLAMA FONKSİYONU
         function manualSeek(val) {
             const time = parseFloat(val);
             if(isYouTube) ytPlayer.seekTo(time); else videoEl.currentTime = time;
             if(audioEl.src) audioEl.currentTime = time;
-            showUI(); // Etkileşim olduğu için arayüzü canlı tut
+            showUI();
         }
 
         function syncUI() {
@@ -253,6 +245,7 @@
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                 pm.classList.remove('is-fullscreen');
             }
+            showUI();
         }
 
         function seekRel(sec) {
