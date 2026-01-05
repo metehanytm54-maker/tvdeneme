@@ -2,39 +2,34 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Pro Sync Player - Auto Hide UI</title>
+    <title>Universal Pro Player - Password Protected</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
         
-        /* Geçiş Efektleri */
-        #playlist-container, .controls-bar { 
-            transition: opacity 0.5s ease, visibility 0.5s; 
-            opacity: 1;
-            visibility: visible;
-        }
-
-        /* Gizleme Sınıfı */
-        .ui-hidden { 
-            opacity: 0 !important; 
-            visibility: hidden !important; 
-        }
-        
+        /* UI Gizleme Sınıfları */
+        #playlist-container, .controls-bar { transition: opacity 0.5s; opacity: 1; visibility: visible; }
+        .ui-hidden { opacity: 0 !important; visibility: hidden !important; }
         .ui-hidden-cursor { cursor: none; }
 
         #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .playlist-item:focus { border-color: #e50914; background: #222; outline: none; }
         
-        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: margin 0.5s ease; }
-        
+        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
         #player-main:fullscreen { margin-left: 0; width: 100vw; height: 100vh; }
-        #player-main:-webkit-full-screen { margin-left: 0; width: 100vw; height: 100vh; }
 
         .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
         video { width: 100%; height: 100%; object-fit: contain; }
+
+        /* Şifre Paneli Overlay */
+        #password-overlay { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); 
+            display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; 
+        }
+        #password-overlay input { padding: 15px; font-size: 24px; text-align: center; border-radius: 10px; border: none; margin-bottom: 20px; width: 300px; }
 
         .controls-bar { 
             position: absolute; bottom: 0; left: 0; right: 0; 
@@ -42,19 +37,21 @@
             padding: 30px 20px; display: flex; flex-direction: column; gap: 15px; z-index: 20;
         }
         .progress-container { display: flex; align-items: center; gap: 15px; }
-        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; height: 8px; }
-        
-        .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
-        .volume-group { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 10px; }
+        input[type="range"] { flex-grow: 1; accent-color: #e50914; cursor: pointer; }
         
         button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         button:focus { background: white; color: black; outline: none; }
-        .btn-fs { background: #444; }
-        
         audio { display: none; }
     </style>
 </head>
-<body class="ui-visible">
+<body>
+
+    <div id="password-overlay">
+        <h2>Lütfen Şifreyi Girin</h2>
+        <input type="password" id="passInput" placeholder="Şifre...">
+        <button onclick="verifyPassword()">ONAYLA</button>
+        <button style="background:#444; margin-top:10px;" onclick="closePass()">İPTAL</button>
+    </div>
 
     <div id="playlist-container">
         <h3>Liste</h3>
@@ -62,14 +59,8 @@
     </div>
 
     <div id="player-main">
-        <div id="yt-layer" class="media-layer">
-            <div id="yt-player"></div>
-        </div>
-
-        <div id="file-layer" class="media-layer">
-            <video id="mainVideo" playsinline></video>
-        </div>
-
+        <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
+        <div id="file-layer" class="media-layer"><video id="mainVideo" playsinline></video></div>
         <audio id="bgAudio"></audio>
 
         <div class="controls-bar">
@@ -78,31 +69,22 @@
                 <input type="range" id="progressBar" value="0" min="0" step="0.1">
                 <span id="totalTime">00:00</span>
             </div>
-
-            <div class="bottom-controls">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; gap:10px;">
                     <button id="playBtn" onclick="togglePlay()">▶ OYNAT</button>
                     <button onclick="seekRel(-10)">-10s</button>
                     <button onclick="seekRel(10)">+10s</button>
-                    <button class="btn-fs" onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
+                    <button onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
                 </div>
-
-                <div style="display: flex; gap: 15px;">
-                    <div class="volume-group">
-                        <span>VİDEO:</span>
-                        <input type="range" id="vVol" min="0" max="100" value="100" oninput="setVVol(this.value)">
-                    </div>
-                    <div class="volume-group">
-                        <span>SES:</span>
-                        <input type="range" id="aVol" min="0" max="100" value="100" oninput="setAVol(this.value)">
-                    </div>
+                <div style="display:flex; gap:15px;">
+                    <div>TV: <input type="range" id="vVol" min="0" max="100" value="100" style="width:70px" oninput="setVVol(this.value)"></div>
+                    <div>SES: <input type="range" id="aVol" min="0" max="100" value="100" style="width:70px" oninput="setAVol(this.value)"></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // FIREBASE CONFIG (Aynı kalıyor)
         const config = {
             apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
             databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
@@ -110,45 +92,30 @@
         };
         firebase.initializeApp(config);
         
-        let ytPlayer;
-        let isYouTube = false;
-        let idleTimer;
+        let ytPlayer, isYouTube = false, idleTimer, currentVideoData = null;
         const videoEl = document.getElementById('mainVideo');
         const audioEl = document.getElementById('bgAudio');
         const progBar = document.getElementById('progressBar');
-        const playerMain = document.getElementById('player-main');
-        const playlist = document.getElementById('playlist-container');
-        const controls = document.querySelector('.controls-bar');
 
-        // --- ARAYÜZ GİZLEME MANTIĞI ---
+        // ARAYÜZ GİZLEME
         function showUI() {
             clearTimeout(idleTimer);
-            playlist.classList.remove('ui-hidden');
-            controls.classList.remove('ui-hidden');
+            document.getElementById('playlist-container').classList.remove('ui-hidden');
+            document.querySelector('.controls-bar').classList.remove('ui-hidden');
             document.body.classList.remove('ui-hidden-cursor');
-            
-            // 5 saniye sonra gizle
             idleTimer = setTimeout(hideUI, 5000);
         }
-
         function hideUI() {
-            // Sadece bir şey oynatılıyorsa gizle (isteğe bağlı, daha iyi kullanıcı deneyimi sunar)
             const playing = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !videoEl.paused;
-            if (playing) {
-                playlist.classList.add('ui-hidden');
-                controls.classList.add('ui-hidden');
+            if(playing) {
+                document.getElementById('playlist-container').classList.add('ui-hidden');
+                document.querySelector('.controls-bar').classList.add('ui-hidden');
                 document.body.classList.add('ui-hidden-cursor');
             }
         }
-
-        // Etkileşimleri Dinle
         window.addEventListener('mousemove', showUI);
         window.addEventListener('keydown', showUI);
-        window.addEventListener('click', showUI);
-        // İlk yüklemede zamanlayıcıyı başlat
-        showUI();
 
-        // --- OYNATICI FONKSİYONLARI (KORUNAN KISIMLAR) ---
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
                 height: '100%', width: '100%',
@@ -166,48 +133,68 @@
                     const div = document.createElement('div');
                     div.className = 'playlist-item';
                     div.tabIndex = "0";
-                    div.innerHTML = `<b>${v.title}</b>`;
-                    div.onclick = () => startMedia(v.v_url, v.a_url);
-                    div.onkeydown = (e) => { if(e.keyCode === 13) startMedia(v.v_url, v.a_url); };
+                    div.innerHTML = `<b>${v.title}</b> ${v.password ? '🔒' : ''}`;
+                    div.onclick = () => preStart(v);
+                    div.onkeydown = (e) => { if(e.keyCode === 13) preStart(v); };
                     container.appendChild(div);
                 });
             });
         }
 
-        function startMedia(vUrl, aUrl) {
+        // Şifre Kontrolü
+        function preStart(v) {
+            currentVideoData = v;
+            if(v.password) {
+                document.getElementById('password-overlay').style.display = 'flex';
+                document.getElementById('passInput').focus();
+            } else {
+                startMedia();
+            }
+        }
+
+        function verifyPassword() {
+            const input = document.getElementById('passInput').value;
+            if(input === currentVideoData.password) {
+                closePass();
+                startMedia();
+            } else {
+                alert("Hatalı Şifre!");
+                document.getElementById('passInput').value = "";
+            }
+        }
+
+        function closePass() {
+            document.getElementById('password-overlay').style.display = 'none';
+            document.getElementById('passInput').value = "";
+        }
+
+        function startMedia() {
+            const v = currentVideoData;
             videoEl.pause();
             if(ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
             audioEl.pause();
-            isYouTube = vUrl.includes('youtube.com') || vUrl.includes('youtu.be');
 
+            isYouTube = v.v_url.includes('youtube.com') || v.v_url.includes('youtu.be');
             if(isYouTube) {
                 document.getElementById('yt-layer').style.display = 'block';
                 document.getElementById('file-layer').style.display = 'none';
-                const vidId = vUrl.split('embed/')[1] || vUrl.split('v=')[1];
+                const vidId = v.v_url.split('embed/')[1] || v.v_url.split('v=')[1];
                 ytPlayer.loadVideoById(vidId);
             } else {
                 document.getElementById('yt-layer').style.display = 'none';
                 document.getElementById('file-layer').style.display = 'block';
-                videoEl.src = vUrl;
+                videoEl.src = v.v_url;
                 videoEl.load();
             }
-            audioEl.src = aUrl;
-            audioEl.load();
-            document.getElementById('playBtn').innerText = "▶ OYNAT";
-            showUI(); // Yeni video seçildiğinde arayüzü göster
-        }
 
-        function toggleFullScreen() {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                if (playerMain.requestFullscreen) playerMain.requestFullscreen();
-                else if (playerMain.webkitRequestFullscreen) playerMain.webkitRequestFullscreen();
-            } else {
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            }
+            if(v.a_url) { audioEl.src = v.a_url; audioEl.load(); } 
+            else { audioEl.src = ""; }
+
+            document.getElementById('playBtn').innerText = "▶ OYNAT";
             showUI();
         }
 
+        // Diğer Kontroller (Play, Sync, Seek, Volume) öncekiyle aynı
         function togglePlay() {
             const btn = document.getElementById('playBtn');
             const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
@@ -215,10 +202,9 @@
                 if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
                 audioEl.pause();
                 btn.innerText = "▶ OYNAT";
-                showUI(); // Durdurulduğunda arayüzü sabit tut
             } else {
                 if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
-                audioEl.play();
+                if(audioEl.src) audioEl.play();
                 btn.innerText = "⏸ DURDUR";
                 requestAnimationFrame(syncUI);
             }
@@ -233,36 +219,34 @@
                 document.getElementById('currTime').innerText = formatTime(cur);
                 document.getElementById('totalTime').innerText = formatTime(dur);
             }
-            if(Math.abs(cur - audioEl.currentTime) > 0.4) {
-                audioEl.currentTime = cur;
-            }
+            if(audioEl.src && Math.abs(cur - audioEl.currentTime) > 0.4) audioEl.currentTime = cur;
             const isPlaying = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
             if(isPlaying) requestAnimationFrame(syncUI);
         }
-
-        progBar.onchange = () => {
-            const val = parseFloat(progBar.value);
-            if(isYouTube) ytPlayer.seekTo(val); else videoEl.currentTime = val;
-            audioEl.currentTime = val;
-            showUI();
-        };
 
         function seekRel(sec) {
             const now = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
             const target = now + sec;
             if(isYouTube) ytPlayer.seekTo(target); else videoEl.currentTime = target;
-            audioEl.currentTime = target;
-            showUI();
+            if(audioEl.src) audioEl.currentTime = target;
         }
 
-        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; showUI(); }
-        function setAVol(v) { audioEl.volume = v/100; showUI(); }
+        function toggleFullScreen() {
+            const pm = document.getElementById('player-main');
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (pm.requestFullscreen) pm.requestFullscreen();
+                else if (pm.webkitRequestFullscreen) pm.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
 
+        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; }
+        function setAVol(v) { audioEl.volume = v/100; }
         function formatTime(s) {
-            const m = Math.floor(s / 60);
-            const sec = Math.floor(s % 60);
-            return (m < 10 ? "0"+m : m) + ":" + (sec < 10 ? "0"+sec : sec);
+            const m = Math.floor(s/60); const sec = Math.floor(s%60);
+            return (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec);
         }
     </script>
 </body>
-</html>
+                        </html>
