@@ -2,22 +2,34 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Pro Sync Player - Fullscreen</title>
+    <title>Universal Pro Sync Player - Auto Hide UI</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
         
-        /* Playlist - Tam ekranda gizlenecek */
-        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; transition: 0.3s; }
+        /* Geçiş Efektleri */
+        #playlist-container, .controls-bar { 
+            transition: opacity 0.5s ease, visibility 0.5s; 
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Gizleme Sınıfı */
+        .ui-hidden { 
+            opacity: 0 !important; 
+            visibility: hidden !important; 
+        }
+        
+        .ui-hidden-cursor { cursor: none; }
+
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .playlist-item:focus { border-color: #e50914; background: #222; outline: none; }
         
-        /* Ana Oynatıcı Alanı */
-        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: margin 0.5s ease; }
         
-        /* Tam Ekran Modu CSS Ayarı */
         #player-main:fullscreen { margin-left: 0; width: 100vw; height: 100vh; }
         #player-main:-webkit-full-screen { margin-left: 0; width: 100vw; height: 100vh; }
 
@@ -37,12 +49,12 @@
         
         button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         button:focus { background: white; color: black; outline: none; }
-        .btn-fs { background: #444; } /* Tam ekran butonu rengi */
+        .btn-fs { background: #444; }
         
         audio { display: none; }
     </style>
 </head>
-<body>
+<body class="ui-visible">
 
     <div id="playlist-container">
         <h3>Liste</h3>
@@ -90,6 +102,7 @@
     </div>
 
     <script>
+        // FIREBASE CONFIG (Aynı kalıyor)
         const config = {
             apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
             databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
@@ -99,11 +112,43 @@
         
         let ytPlayer;
         let isYouTube = false;
+        let idleTimer;
         const videoEl = document.getElementById('mainVideo');
         const audioEl = document.getElementById('bgAudio');
         const progBar = document.getElementById('progressBar');
         const playerMain = document.getElementById('player-main');
+        const playlist = document.getElementById('playlist-container');
+        const controls = document.querySelector('.controls-bar');
 
+        // --- ARAYÜZ GİZLEME MANTIĞI ---
+        function showUI() {
+            clearTimeout(idleTimer);
+            playlist.classList.remove('ui-hidden');
+            controls.classList.remove('ui-hidden');
+            document.body.classList.remove('ui-hidden-cursor');
+            
+            // 5 saniye sonra gizle
+            idleTimer = setTimeout(hideUI, 5000);
+        }
+
+        function hideUI() {
+            // Sadece bir şey oynatılıyorsa gizle (isteğe bağlı, daha iyi kullanıcı deneyimi sunar)
+            const playing = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if (playing) {
+                playlist.classList.add('ui-hidden');
+                controls.classList.add('ui-hidden');
+                document.body.classList.add('ui-hidden-cursor');
+            }
+        }
+
+        // Etkileşimleri Dinle
+        window.addEventListener('mousemove', showUI);
+        window.addEventListener('keydown', showUI);
+        window.addEventListener('click', showUI);
+        // İlk yüklemede zamanlayıcıyı başlat
+        showUI();
+
+        // --- OYNATICI FONKSİYONLARI (KORUNAN KISIMLAR) ---
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
                 height: '100%', width: '100%',
@@ -140,7 +185,6 @@
                 document.getElementById('file-layer').style.display = 'none';
                 const vidId = vUrl.split('embed/')[1] || vUrl.split('v=')[1];
                 ytPlayer.loadVideoById(vidId);
-                ytPlayer.pauseVideo();
             } else {
                 document.getElementById('yt-layer').style.display = 'none';
                 document.getElementById('file-layer').style.display = 'block';
@@ -150,26 +194,18 @@
             audioEl.src = aUrl;
             audioEl.load();
             document.getElementById('playBtn').innerText = "▶ OYNAT";
+            showUI(); // Yeni video seçildiğinde arayüzü göster
         }
 
-        // TAM EKRAN FONKSİYONU
         function toggleFullScreen() {
-            if (!document.fullscreenElement && 
-                !document.webkitFullscreenElement && 
-                !document.mozFullScreenElement && 
-                !document.msFullscreenElement) {
-                // Tam ekrana gir
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 if (playerMain.requestFullscreen) playerMain.requestFullscreen();
                 else if (playerMain.webkitRequestFullscreen) playerMain.webkitRequestFullscreen();
-                else if (playerMain.mozRequestFullScreen) playerMain.mozRequestFullScreen();
-                else if (playerMain.msRequestFullscreen) playerMain.msRequestFullscreen();
             } else {
-                // Tam ekrandan çık
                 if (document.exitFullscreen) document.exitFullscreen();
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
-                else if (document.msExitFullscreen) document.msExitFullscreen();
             }
+            showUI();
         }
 
         function togglePlay() {
@@ -179,6 +215,7 @@
                 if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
                 audioEl.pause();
                 btn.innerText = "▶ OYNAT";
+                showUI(); // Durdurulduğunda arayüzü sabit tut
             } else {
                 if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
                 audioEl.play();
@@ -196,7 +233,7 @@
                 document.getElementById('currTime').innerText = formatTime(cur);
                 document.getElementById('totalTime').innerText = formatTime(dur);
             }
-            if(Math.abs(cur - audioEl.currentTime) > 0.5) {
+            if(Math.abs(cur - audioEl.currentTime) > 0.4) {
                 audioEl.currentTime = cur;
             }
             const isPlaying = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
@@ -207,6 +244,7 @@
             const val = parseFloat(progBar.value);
             if(isYouTube) ytPlayer.seekTo(val); else videoEl.currentTime = val;
             audioEl.currentTime = val;
+            showUI();
         };
 
         function seekRel(sec) {
@@ -214,10 +252,11 @@
             const target = now + sec;
             if(isYouTube) ytPlayer.seekTo(target); else videoEl.currentTime = target;
             audioEl.currentTime = target;
+            showUI();
         }
 
-        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; }
-        function setAVol(v) { audioEl.volume = v/100; }
+        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; showUI(); }
+        function setAVol(v) { audioEl.volume = v/100; showUI(); }
 
         function formatTime(s) {
             const m = Math.floor(s / 60);
@@ -226,4 +265,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
