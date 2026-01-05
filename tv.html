@@ -2,80 +2,77 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Pro Sync Player</title>
+    <title>Universal Pro Sync Player</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
-        
-        /* PLAYLIST TASARIMI */
-        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 300px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
-        .playlist-item:focus, .playlist-item:hover { border-color: #e50914; background: #222; outline: none; }
+        .playlist-item:focus { border-color: #e50914; background: #222; outline: none; }
         
-        /* ANA OYNATICI ALANI */
-        #player-main { margin-left: 300px; height: 100vh; position: relative; background: #000; }
-        #video-placeholder { width: 100%; height: 100%; }
+        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        
+        /* Oynatıcı Katmanları */
+        .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
+        video { width: 100%; height: 100%; object-fit: contain; }
 
-        /* KONTROL PANELİ */
         .controls-bar { 
             position: absolute; bottom: 0; left: 0; right: 0; 
-            background: linear-gradient(transparent, rgba(0,0,0,0.9)); 
-            padding: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 20;
+            background: linear-gradient(transparent, rgba(0,0,0,0.95)); 
+            padding: 30px 20px; display: flex; flex-direction: column; gap: 15px; z-index: 20;
         }
-
-        /* İlerleme Çubuğu */
-        .progress-container { display: flex; align-items: center; gap: 10px; }
-        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; }
-
-        /* Butonlar ve Sesler */
-        .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
-        .buttons { display: flex; align-items: center; gap: 20px; }
-        .volume-group { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; }
+        .progress-container { display: flex; align-items: center; gap: 15px; }
+        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; height: 8px; }
         
-        button { background: none; border: none; color: white; cursor: pointer; font-size: 20px; font-weight: bold; }
-        button:focus { color: #e50914; outline: none; }
-
-        .time-display { font-family: monospace; font-size: 14px; }
+        .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
+        .volume-group { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 10px; }
+        button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:focus { background: white; color: black; outline: none; }
         audio { display: none; }
     </style>
 </head>
 <body>
 
     <div id="playlist-container">
-        <h3>Oynatma Listesi</h3>
+        <h3>Liste</h3>
         <div id="list-items">Yükleniyor...</div>
     </div>
 
     <div id="player-main">
-        <div id="yt-player"></div>
+        <div id="yt-layer" class="media-layer">
+            <div id="yt-player"></div>
+        </div>
+
+        <div id="file-layer" class="media-layer">
+            <video id="mainVideo" playsinline></video>
+        </div>
+
         <audio id="bgAudio"></audio>
 
         <div class="controls-bar">
             <div class="progress-container">
-                <span class="time-display" id="currTime">00:00</span>
+                <span id="currTime">00:00</span>
                 <input type="range" id="progressBar" value="0" min="0" step="0.1">
-                <span class="time-display" id="totalTime">00:00</span>
+                <span id="totalTime">00:00</span>
             </div>
 
             <div class="bottom-controls">
-                <div class="buttons">
+                <div style="display:flex; gap:10px;">
                     <button id="playBtn" onclick="togglePlay()">▶ OYNAT</button>
-                    <button onclick="rewind()">« 10s</button>
-                    <button onclick="forward()">10s »</button>
+                    <button onclick="seekRel(-10)">-10s</button>
+                    <button onclick="seekRel(10)">+10s</button>
                 </div>
 
-                <div style="display: flex; gap: 20px;">
+                <div style="display: flex; gap: 15px;">
                     <div class="volume-group">
-                        <span>📺 Video:</span>
-                        <input type="range" id="vVolume" min="0" max="100" value="100" style="width: 80px;" oninput="setVideoVolume(this.value)">
-                        <button id="vMute" onclick="toggleMute('video')">🔊</button>
+                        <span>VİDEO:</span>
+                        <input type="range" id="vVol" min="0" max="100" value="100" oninput="setVVol(this.value)">
                     </div>
                     <div class="volume-group">
-                        <span>📻 Ses:</span>
-                        <input type="range" id="aVolume" min="0" max="100" value="100" style="width: 80px;" oninput="setAudioVolume(this.value)">
-                        <button id="aMute" onclick="toggleMute('audio')">🔊</button>
+                        <span>SES:</span>
+                        <input type="range" id="aVol" min="0" max="100" value="100" oninput="setAVol(this.value)">
                     </div>
                 </div>
             </div>
@@ -89,113 +86,116 @@
             projectId: "naberdeneme-ffa04"
         };
         firebase.initializeApp(config);
-        const db = firebase.database();
+        
+        let ytPlayer;
+        let isYouTube = false;
+        const videoEl = document.getElementById('mainVideo');
+        const audioEl = document.getElementById('bgAudio');
+        const progBar = document.getElementById('progressBar');
 
-        let player; // YouTube Player
-        const audio = document.getElementById('bgAudio');
-        const progressBar = document.getElementById('progressBar');
-        let isDragging = false;
-
-        // 1. YouTube API Hazır Olduğunda
+        // YouTube API Kurulumu
         function onYouTubeIframeAPIReady() {
-            player = new YT.Player('yt-player', {
+            ytPlayer = new YT.Player('yt-player', {
                 height: '100%', width: '100%',
-                playerVars: { 'controls': 0, 'disablekb': 1, 'rel': 0 },
-                events: { 'onReady': onPlayerReady }
+                playerVars: { 'controls': 0, 'rel': 0, 'enablejsapi': 1 },
+                events: { 'onReady': () => loadPlaylist() }
             });
         }
 
-        function onPlayerReady() {
-            loadPlaylist();
-        }
-
-        // 2. Playlist Yükle
         function loadPlaylist() {
-            db.ref('videolar').on('value', snap => {
+            firebase.database().ref('videolar').on('value', snap => {
                 const container = document.getElementById('list-items');
                 container.innerHTML = "";
                 snap.forEach(child => {
                     const v = child.val();
-                    const item = document.createElement('div');
-                    item.className = 'playlist-item';
-                    item.tabIndex = "0";
-                    item.innerHTML = `<b>${v.title}</b>`;
-                    item.onclick = () => selectVideo(v.v_url, v.a_url);
-                    item.onkeydown = (e) => { if(e.keyCode === 13) selectVideo(v.v_url, v.a_url); };
-                    container.appendChild(item);
+                    const div = document.createElement('div');
+                    div.className = 'playlist-item';
+                    div.tabIndex = "0";
+                    div.innerHTML = `<b>${v.title}</b>`;
+                    div.onclick = () => startMedia(v.v_url, v.a_url);
+                    div.onkeydown = (e) => { if(e.keyCode === 13) startMedia(v.v_url, v.a_url); };
+                    container.appendChild(div);
                 });
             });
         }
 
-        // 3. Video Seçimi
-        function selectVideo(vUrl, aUrl) {
-            const videoId = vUrl.split('embed/')[1] || vUrl.split('v=')[1];
-            player.loadVideoById(videoId);
-            player.pauseVideo();
-            
-            audio.src = aUrl;
-            audio.load();
-            
-            // Sıfırlama
-            progressBar.value = 0;
+        function startMedia(vUrl, aUrl) {
+            // Durdur her şeyi
+            videoEl.pause();
+            if(ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+            audioEl.pause();
+
+            // Format Kontrolü (YouTube mu yoksa dosya mı?)
+            isYouTube = vUrl.includes('youtube.com') || vUrl.includes('youtu.be');
+
+            if(isYouTube) {
+                document.getElementById('yt-layer').style.display = 'block';
+                document.getElementById('file-layer').style.display = 'none';
+                const vidId = vUrl.split('embed/')[1] || vUrl.split('v=')[1];
+                ytPlayer.loadVideoById(vidId);
+                ytPlayer.pauseVideo();
+            } else {
+                document.getElementById('yt-layer').style.display = 'none';
+                document.getElementById('file-layer').style.display = 'block';
+                videoEl.src = vUrl;
+                videoEl.load();
+            }
+
+            audioEl.src = aUrl;
+            audioEl.load();
             document.getElementById('playBtn').innerText = "▶ OYNAT";
         }
 
-        // 4. Oynat / Duraklat (Sync)
         function togglePlay() {
             const btn = document.getElementById('playBtn');
-            if (player.getPlayerState() === 1) {
-                player.pauseVideo();
-                audio.pause();
+            const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+
+            if(playing) {
+                if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
+                audioEl.pause();
                 btn.innerText = "▶ OYNAT";
             } else {
-                player.playVideo();
-                audio.play();
-                btn.innerText = "⏸ DURAKLAT";
-                updateProgress();
+                if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
+                audioEl.play();
+                btn.innerText = "⏸ DURDUR";
+                requestAnimationFrame(syncUI);
             }
         }
 
-        // 5. İlerleme Çubuğu Güncelleme
-        function updateProgress() {
-            if (isDragging) return;
-            const curr = player.getCurrentTime();
-            const total = player.getDuration();
-            
-            if (total > 0) {
-                progressBar.max = total;
-                progressBar.value = curr;
-                document.getElementById('currTime').innerText = formatTime(curr);
-                document.getElementById('totalTime').innerText = formatTime(total);
+        function syncUI() {
+            const cur = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+            const dur = isYouTube ? ytPlayer.getDuration() : videoEl.duration;
+
+            if(dur > 0) {
+                progBar.max = dur;
+                progBar.value = cur;
+                document.getElementById('currTime').innerText = formatTime(cur);
+                document.getElementById('totalTime').innerText = formatTime(dur);
             }
-            if (player.getPlayerState() === 1) requestAnimationFrame(updateProgress);
+            // Senkronizasyon Koruması (Video ve Ses arasında 0.5sn fark varsa düzelt)
+            if(Math.abs(cur - audioEl.currentTime) > 0.5) {
+                audioEl.currentTime = cur;
+            }
+
+            const isPlaying = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if(isPlaying) requestAnimationFrame(syncUI);
         }
 
-        // 6. İleri/Geri Sarma (Seek)
-        progressBar.oninput = () => { isDragging = true; };
-        progressBar.onchange = () => {
-            const val = parseFloat(progressBar.value);
-            player.seekTo(val);
-            audio.currentTime = val;
-            isDragging = false;
+        progBar.onchange = () => {
+            const val = parseFloat(progBar.value);
+            if(isYouTube) ytPlayer.seekTo(val); else videoEl.currentTime = val;
+            audioEl.currentTime = val;
         };
 
-        function forward() { player.seekTo(player.getCurrentTime() + 10); audio.currentTime += 10; }
-        function rewind() { player.seekTo(player.getCurrentTime() - 10); audio.currentTime -= 10; }
-
-        // 7. Ses Ayarları
-        function setVideoVolume(v) { player.setVolume(v); }
-        function setAudioVolume(v) { audio.volume = v / 100; }
-
-        function toggleMute(type) {
-            if(type === 'video') {
-                if(player.isMuted()) { player.unMute(); document.getElementById('vMute').innerText = "🔊"; }
-                else { player.mute(); document.getElementById('vMute').innerText = "🔇"; }
-            } else {
-                audio.muted = !audio.muted;
-                document.getElementById('aMute').innerText = audio.muted ? "🔇" : "🔊";
-            }
+        function seekRel(sec) {
+            const now = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+            const target = now + sec;
+            if(isYouTube) ytPlayer.seekTo(target); else videoEl.currentTime = target;
+            audioEl.currentTime = target;
         }
+
+        function setVVol(v) { if(isYouTube) ytPlayer.setVolume(v); else videoEl.volume = v/100; }
+        function setAVol(v) { audioEl.volume = v/100; }
 
         function formatTime(s) {
             const m = Math.floor(s / 60);
@@ -204,4 +204,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
