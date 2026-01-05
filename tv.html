@@ -2,19 +2,25 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Pro Sync Player</title>
+    <title>Universal Pro Sync Player - Fullscreen</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
-        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
+        
+        /* Playlist - Tam ekranda gizlenecek */
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; transition: 0.3s; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .playlist-item:focus { border-color: #e50914; background: #222; outline: none; }
         
-        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        /* Ana Oynatıcı Alanı */
+        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
         
-        /* Oynatıcı Katmanları */
+        /* Tam Ekran Modu CSS Ayarı */
+        #player-main:fullscreen { margin-left: 0; width: 100vw; height: 100vh; }
+        #player-main:-webkit-full-screen { margin-left: 0; width: 100vw; height: 100vh; }
+
         .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
         video { width: 100%; height: 100%; object-fit: contain; }
 
@@ -28,8 +34,11 @@
         
         .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
         .volume-group { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 10px; }
+        
         button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         button:focus { background: white; color: black; outline: none; }
+        .btn-fs { background: #444; } /* Tam ekran butonu rengi */
+        
         audio { display: none; }
     </style>
 </head>
@@ -63,6 +72,7 @@
                     <button id="playBtn" onclick="togglePlay()">▶ OYNAT</button>
                     <button onclick="seekRel(-10)">-10s</button>
                     <button onclick="seekRel(10)">+10s</button>
+                    <button class="btn-fs" onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
                 </div>
 
                 <div style="display: flex; gap: 15px;">
@@ -92,8 +102,8 @@
         const videoEl = document.getElementById('mainVideo');
         const audioEl = document.getElementById('bgAudio');
         const progBar = document.getElementById('progressBar');
+        const playerMain = document.getElementById('player-main');
 
-        // YouTube API Kurulumu
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
                 height: '100%', width: '100%',
@@ -120,12 +130,9 @@
         }
 
         function startMedia(vUrl, aUrl) {
-            // Durdur her şeyi
             videoEl.pause();
             if(ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
             audioEl.pause();
-
-            // Format Kontrolü (YouTube mu yoksa dosya mı?)
             isYouTube = vUrl.includes('youtube.com') || vUrl.includes('youtu.be');
 
             if(isYouTube) {
@@ -140,16 +147,34 @@
                 videoEl.src = vUrl;
                 videoEl.load();
             }
-
             audioEl.src = aUrl;
             audioEl.load();
             document.getElementById('playBtn').innerText = "▶ OYNAT";
         }
 
+        // TAM EKRAN FONKSİYONU
+        function toggleFullScreen() {
+            if (!document.fullscreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.msFullscreenElement) {
+                // Tam ekrana gir
+                if (playerMain.requestFullscreen) playerMain.requestFullscreen();
+                else if (playerMain.webkitRequestFullscreen) playerMain.webkitRequestFullscreen();
+                else if (playerMain.mozRequestFullScreen) playerMain.mozRequestFullScreen();
+                else if (playerMain.msRequestFullscreen) playerMain.msRequestFullscreen();
+            } else {
+                // Tam ekrandan çık
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+            }
+        }
+
         function togglePlay() {
             const btn = document.getElementById('playBtn');
             const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
-
             if(playing) {
                 if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
                 audioEl.pause();
@@ -165,18 +190,15 @@
         function syncUI() {
             const cur = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
             const dur = isYouTube ? ytPlayer.getDuration() : videoEl.duration;
-
             if(dur > 0) {
                 progBar.max = dur;
                 progBar.value = cur;
                 document.getElementById('currTime').innerText = formatTime(cur);
                 document.getElementById('totalTime').innerText = formatTime(dur);
             }
-            // Senkronizasyon Koruması (Video ve Ses arasında 0.5sn fark varsa düzelt)
             if(Math.abs(cur - audioEl.currentTime) > 0.5) {
                 audioEl.currentTime = cur;
             }
-
             const isPlaying = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
             if(isPlaying) requestAnimationFrame(syncUI);
         }
@@ -204,4 +226,4 @@
         }
     </script>
 </body>
-</html>
+    </html>
