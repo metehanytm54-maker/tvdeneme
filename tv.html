@@ -2,21 +2,85 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>TV Portal - Liste</title>
+    <title>Pro Sync Player</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
-        body { background: #0a0a0a; color: white; font-family: sans-serif; padding: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
-        .card { background: #181818; border-radius: 12px; border: 3px solid transparent; cursor: pointer; transition: 0.3s; outline: none; }
-        .card:focus { border-color: #e50914; transform: scale(1.1); }
-        .card-img { height: 120px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 40px; border-radius: 12px 12px 0 0; }
-        .card-title { padding: 12px; font-size: 14px; text-align: center; font-weight: bold; }
+        body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        /* PLAYLIST TASARIMI */
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 300px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
+        .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+        .playlist-item:focus, .playlist-item:hover { border-color: #e50914; background: #222; outline: none; }
+        
+        /* ANA OYNATICI ALANI */
+        #player-main { margin-left: 300px; height: 100vh; position: relative; background: #000; }
+        #video-placeholder { width: 100%; height: 100%; }
+
+        /* KONTROL PANELİ */
+        .controls-bar { 
+            position: absolute; bottom: 0; left: 0; right: 0; 
+            background: linear-gradient(transparent, rgba(0,0,0,0.9)); 
+            padding: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 20;
+        }
+
+        /* İlerleme Çubuğu */
+        .progress-container { display: flex; align-items: center; gap: 10px; }
+        input[type="range"] { flex-grow: 1; cursor: pointer; accent-color: #e50914; }
+
+        /* Butonlar ve Sesler */
+        .bottom-controls { display: flex; align-items: center; justify-content: space-between; }
+        .buttons { display: flex; align-items: center; gap: 20px; }
+        .volume-group { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; }
+        
+        button { background: none; border: none; color: white; cursor: pointer; font-size: 20px; font-weight: bold; }
+        button:focus { color: #e50914; outline: none; }
+
+        .time-display { font-family: monospace; font-size: 14px; }
+        audio { display: none; }
     </style>
 </head>
 <body>
-    <h1>Video Kütüphanesi</h1>
-    <div class="grid" id="main-list">Yükleniyor...</div>
+
+    <div id="playlist-container">
+        <h3>Oynatma Listesi</h3>
+        <div id="list-items">Yükleniyor...</div>
+    </div>
+
+    <div id="player-main">
+        <div id="yt-player"></div>
+        <audio id="bgAudio"></audio>
+
+        <div class="controls-bar">
+            <div class="progress-container">
+                <span class="time-display" id="currTime">00:00</span>
+                <input type="range" id="progressBar" value="0" min="0" step="0.1">
+                <span class="time-display" id="totalTime">00:00</span>
+            </div>
+
+            <div class="bottom-controls">
+                <div class="buttons">
+                    <button id="playBtn" onclick="togglePlay()">▶ OYNAT</button>
+                    <button onclick="rewind()">« 10s</button>
+                    <button onclick="forward()">10s »</button>
+                </div>
+
+                <div style="display: flex; gap: 20px;">
+                    <div class="volume-group">
+                        <span>📺 Video:</span>
+                        <input type="range" id="vVolume" min="0" max="100" value="100" style="width: 80px;" oninput="setVideoVolume(this.value)">
+                        <button id="vMute" onclick="toggleMute('video')">🔊</button>
+                    </div>
+                    <div class="volume-group">
+                        <span>📻 Ses:</span>
+                        <input type="range" id="aVolume" min="0" max="100" value="100" style="width: 80px;" oninput="setAudioVolume(this.value)">
+                        <button id="aMute" onclick="toggleMute('audio')">🔊</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const config = {
@@ -25,28 +89,119 @@
             projectId: "naberdeneme-ffa04"
         };
         firebase.initializeApp(config);
+        const db = firebase.database();
 
-        firebase.database().ref('videolar').on('value', snap => {
-            const list = document.getElementById('main-list');
-            list.innerHTML = "";
-            snap.forEach(child => {
-                const v = child.val();
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.tabIndex = "0";
-                card.innerHTML = `<div class="card-img">🎬</div><div class="card-title">${v.title}</div>`;
-                
-                // Tıklandığında player.html sayfasını yeni sekmede aç ve linkleri URL'ye ekle
-                const openFunc = () => {
-                    const playerUrl = `player.html?v=${encodeURIComponent(v.v_url)}&a=${encodeURIComponent(v.a_url)}`;
-                    window.open(playerUrl, '_blank');
-                };
+        let player; // YouTube Player
+        const audio = document.getElementById('bgAudio');
+        const progressBar = document.getElementById('progressBar');
+        let isDragging = false;
 
-                card.onclick = openFunc;
-                card.onkeydown = (e) => { if(e.keyCode === 13) openFunc(); };
-                list.appendChild(card);
+        // 1. YouTube API Hazır Olduğunda
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '100%', width: '100%',
+                playerVars: { 'controls': 0, 'disablekb': 1, 'rel': 0 },
+                events: { 'onReady': onPlayerReady }
             });
-        });
+        }
+
+        function onPlayerReady() {
+            loadPlaylist();
+        }
+
+        // 2. Playlist Yükle
+        function loadPlaylist() {
+            db.ref('videolar').on('value', snap => {
+                const container = document.getElementById('list-items');
+                container.innerHTML = "";
+                snap.forEach(child => {
+                    const v = child.val();
+                    const item = document.createElement('div');
+                    item.className = 'playlist-item';
+                    item.tabIndex = "0";
+                    item.innerHTML = `<b>${v.title}</b>`;
+                    item.onclick = () => selectVideo(v.v_url, v.a_url);
+                    item.onkeydown = (e) => { if(e.keyCode === 13) selectVideo(v.v_url, v.a_url); };
+                    container.appendChild(item);
+                });
+            });
+        }
+
+        // 3. Video Seçimi
+        function selectVideo(vUrl, aUrl) {
+            const videoId = vUrl.split('embed/')[1] || vUrl.split('v=')[1];
+            player.loadVideoById(videoId);
+            player.pauseVideo();
+            
+            audio.src = aUrl;
+            audio.load();
+            
+            // Sıfırlama
+            progressBar.value = 0;
+            document.getElementById('playBtn').innerText = "▶ OYNAT";
+        }
+
+        // 4. Oynat / Duraklat (Sync)
+        function togglePlay() {
+            const btn = document.getElementById('playBtn');
+            if (player.getPlayerState() === 1) {
+                player.pauseVideo();
+                audio.pause();
+                btn.innerText = "▶ OYNAT";
+            } else {
+                player.playVideo();
+                audio.play();
+                btn.innerText = "⏸ DURAKLAT";
+                updateProgress();
+            }
+        }
+
+        // 5. İlerleme Çubuğu Güncelleme
+        function updateProgress() {
+            if (isDragging) return;
+            const curr = player.getCurrentTime();
+            const total = player.getDuration();
+            
+            if (total > 0) {
+                progressBar.max = total;
+                progressBar.value = curr;
+                document.getElementById('currTime').innerText = formatTime(curr);
+                document.getElementById('totalTime').innerText = formatTime(total);
+            }
+            if (player.getPlayerState() === 1) requestAnimationFrame(updateProgress);
+        }
+
+        // 6. İleri/Geri Sarma (Seek)
+        progressBar.oninput = () => { isDragging = true; };
+        progressBar.onchange = () => {
+            const val = parseFloat(progressBar.value);
+            player.seekTo(val);
+            audio.currentTime = val;
+            isDragging = false;
+        };
+
+        function forward() { player.seekTo(player.getCurrentTime() + 10); audio.currentTime += 10; }
+        function rewind() { player.seekTo(player.getCurrentTime() - 10); audio.currentTime -= 10; }
+
+        // 7. Ses Ayarları
+        function setVideoVolume(v) { player.setVolume(v); }
+        function setAudioVolume(v) { audio.volume = v / 100; }
+
+        function toggleMute(type) {
+            if(type === 'video') {
+                if(player.isMuted()) { player.unMute(); document.getElementById('vMute').innerText = "🔊"; }
+                else { player.mute(); document.getElementById('vMute').innerText = "🔇"; }
+            } else {
+                audio.muted = !audio.muted;
+                document.getElementById('aMute').innerText = audio.muted ? "🔇" : "🔊";
+            }
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return (m < 10 ? "0"+m : m) + ":" + (sec < 10 ? "0"+sec : sec);
+        }
     </script>
 </body>
-</html>
+    </html>
