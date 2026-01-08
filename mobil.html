@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobil Video Player</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        :root { --primary: #e50914; --bg: #000; --panel: #141414; }
+        body { background: var(--bg); color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto; margin: 0; overflow: hidden; position: fixed; width: 100%; height: 100%; }
+
+        /* Mobil Playlist (Drawer) */
+        #playlist-drawer { position: fixed; left: -100%; top: 0; width: 85%; height: 100%; background: var(--panel); z-index: 1000; transition: 0.3s; overflow-y: auto; box-shadow: 5px 0 15px rgba(0,0,0,0.5); }
+        #playlist-drawer.open { left: 0; }
+        .drawer-header { padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .playlist-item { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; }
+        .playlist-item:active { background: #222; }
+
+        /* Ana Player Alanı */
+        #main-container { width: 100vw; height: 100vh; position: relative; display: flex; flex-direction: column; }
+        #video-viewport { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        
+        .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        #yt-shield { position: absolute; width: 100%; height: 100%; z-index: 5; display: none; }
+
+        /* Mobil Kontroller */
+        .ui-overlay { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,0.4); transition: opacity 0.4s; display: flex; flex-direction: column; justify-content: space-between; }
+        .ui-hidden { opacity: 0; pointer-events: none; }
+        
+        .top-bar { padding: 15px; display: flex; gap: 10px; }
+        .bottom-bar { padding: 20px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); }
+
+        /* Progress Bar */
+        .progress-box { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        input[type="range"] { flex: 1; accent-color: var(--primary); height: 5px; }
+
+        .controls-row { display: flex; justify-content: space-around; align-items: center; }
+        .btn-mob { background: rgba(255,255,255,0.1); border: none; color: white; padding: 12px; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .btn-main { background: var(--primary); width: 65px; height: 65px; font-size: 24px; }
+
+        /* Şifre Paneli */
+        #pass-box { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #pass-box input { width: 80%; padding: 15px; border-radius: 10px; border: none; font-size: 18px; text-align: center; margin-bottom: 20px; }
+
+        .time-label { font-size: 12px; font-family: monospace; }
+    </style>
+</head>
+<body onclick="resetIdle()">
+
+    <div id="pass-box">
+        <h3>🔒 Özel İçerik</h3>
+        <input type="password" id="passInput" placeholder="Şifre">
+        <button class="btn-mob" style="width: auto; border-radius: 10px; padding: 10px 40px;" onclick="checkPassword()">GİRİŞ</button>
+    </div>
+
+    <div id="playlist-drawer">
+        <div class="drawer-header">
+            <h3>Videolar</h3>
+            <button onclick="toggleDrawer()" style="background:none; border:none; color:white; font-size:24px;">✕</button>
+        </div>
+        <div id="list-items">Yükleniyor...</div>
+    </div>
+
+    <div id="main-container">
+        <div id="video-viewport" onclick="handleViewClick(event)">
+            <div id="yt-shield"></div>
+            <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
+            <div id="file-layer" class="media-layer"><video id="mainVideo" playsinline></video></div>
+            <audio id="bgAudio"></audio>
+
+            <div class="ui-overlay" id="ui-layer">
+                <div class="top-bar">
+                    <button class="btn-mob" onclick="toggleDrawer()">☰</button>
+                    <div id="v-title" style="margin-top:12px; font-weight:bold;">Video Seçilmedi</div>
+                </div>
+
+                <div class="bottom-bar">
+                    <div class="progress-box">
+                        <span class="time-label" id="currTime">00:00</span>
+                        <input type="range" id="progressBar" value="0" min="0" step="0.1" oninput="manualSeek(this.value)">
+                        <span class="time-label" id="totalTime">00:00</span>
+                    </div>
+                    <div class="controls-row">
+                        <button class="btn-mob" onclick="seekRel(-10)">-10</button>
+                        <button class="btn-mob btn-main" id="playBtn" onclick="togglePlay()">▶</button>
+                        <button class="btn-mob" onclick="seekRel(10)">+10</button>
+                        <button class="btn-mob" onclick="toggleFullScreen()">⛶</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
+            databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
+            projectId: "naberdeneme-ffa04"
+        };
+        firebase.initializeApp(config);
+        
+        let ytPlayer, isYouTube = false, pendingVideo = null, idleTimer, lastClickTime = 0;
+        const videoEl = document.getElementById('mainVideo');
+        const audioEl = document.getElementById('bgAudio');
+        const progBar = document.getElementById('progressBar');
+
+        // Otomatik Gizleme
+        function resetIdle() {
+            document.getElementById('ui-layer').classList.remove('ui-hidden');
+            clearTimeout(idleTimer);
+            const playing = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if(playing) idleTimer = setTimeout(() => {
+                document.getElementById('ui-layer').classList.add('ui-hidden');
+            }, 3000);
+        }
+
+        // Tıklama Yönetimi (Çift tıkla ileri/geri)
+        function handleViewClick(e) {
+            const now = Date.now();
+            if (now - lastClickTime < 300) {
+                const rect = e.target.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                if (x > rect.width / 2) seekRel(10); else seekRel(-10);
+                return;
+            }
+            lastClickTime = now;
+            resetIdle();
+        }
+
+        function toggleDrawer() { document.getElementById('playlist-drawer').classList.toggle('open'); }
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('yt-player', {
+                height: '100%', width: '100%',
+                playerVars: { 'controls': 0, 'rel': 0, 'disablekb': 1, 'fs': 0 },
+                events: { 'onReady': () => loadPlaylist() }
+            });
+        }
+
+        function loadPlaylist() {
+            firebase.database().ref('videolar').on('value', snap => {
+                const container = document.getElementById('list-items');
+                container.innerHTML = "";
+                snap.forEach(child => {
+                    const v = child.val();
+                    const div = document.createElement('div');
+                    div.className = 'playlist-item';
+                    div.innerHTML = `<b>${v.title}</b> ${v.password ? '🔒' : ''}`;
+                    div.onclick = () => {
+                        pendingVideo = v;
+                        if(v.password) document.getElementById('pass-box').style.display='flex';
+                        else startMedia(v);
+                        toggleDrawer();
+                    };
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        function checkPassword() {
+            if(document.getElementById('passInput').value === pendingVideo.password) {
+                document.getElementById('pass-box').style.display='none';
+                startMedia(pendingVideo);
+            } else alert("Hatalı!");
+        }
+
+        function startMedia(v) {
+            videoEl.pause(); if(ytPlayer?.pauseVideo) ytPlayer.pauseVideo();
+            document.getElementById('v-title').innerText = v.title;
+            isYouTube = v.v_url.includes('youtube') || v.v_url.includes('embed');
+
+            if(isYouTube) {
+                document.getElementById('yt-layer').style.display = 'block';
+                document.getElementById('yt-shield').style.display = 'block';
+                document.getElementById('file-layer').style.display = 'none';
+                const vidId = v.v_url.split('embed/')[1] || v.v_url.split('v=')[1];
+                ytPlayer.loadVideoById(vidId);
+            } else {
+                document.getElementById('yt-layer').style.display = 'none';
+                document.getElementById('yt-shield').style.display = 'none';
+                document.getElementById('file-layer').style.display = 'block';
+                videoEl.src = v.v_url; videoEl.play();
+            }
+            audioEl.src = v.a_url || ""; if(v.a_url) audioEl.play();
+            document.getElementById('playBtn').innerText = "⏸";
+            requestAnimationFrame(syncUI);
+        }
+
+        function togglePlay() {
+            const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if(playing) {
+                if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
+                audioEl.pause(); document.getElementById('playBtn').innerText = "▶";
+            } else {
+                if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
+                if(audioEl.src) audioEl.play(); document.getElementById('playBtn').innerText = "⏸";
+                requestAnimationFrame(syncUI);
+            }
+        }
+
+        function syncUI() {
+            const cur = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+            const dur = isYouTube ? ytPlayer.getDuration() : videoEl.duration;
+            if(dur > 0) {
+                progBar.max = dur; progBar.value = cur;
+                document.getElementById('currTime').innerText = formatTime(cur);
+                document.getElementById('totalTime').innerText = formatTime(dur);
+            }
+            if(audioEl.src && Math.abs(cur - audioEl.currentTime) > 0.4) audioEl.currentTime = cur;
+            if(isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused) requestAnimationFrame(syncUI);
+        }
+
+        function manualSeek(v) { 
+            if(isYouTube) ytPlayer.seekTo(v); else videoEl.currentTime = v; 
+            if(audioEl.src) audioEl.currentTime = v;
+        }
+
+        function seekRel(s) {
+            const now = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+            manualSeek(now + s);
+        }
+
+        function toggleFullScreen() {
+            const doc = document.documentElement;
+            if (!document.fullscreenElement) doc.requestFullscreen();
+            else document.exitFullscreen();
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s/60); const sec = Math.floor(s%60);
+            return (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec);
+        }
+    </script>
+</body>
+</html>
