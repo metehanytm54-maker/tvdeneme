@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Özel TV - HLS Fix</title>
+    <title>Özel TV - Proxy & HLS Fix</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <style>
         :root { --red: #e50914; --bg: #000; }
@@ -24,12 +24,12 @@
         .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 30px 20px 15px; z-index: 200; }
         button { background: var(--red); border: none; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .sec-btn { background: #333; margin-left: 5px; }
-        #debug-msg { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: lime; padding: 10px; font-size: 12px; z-index: 1000; pointer-events: none; max-width: 300px; }
+        #debug-msg { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: lime; padding: 10px; font-size: 11px; z-index: 1000; pointer-events: none; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-<div id="debug-msg">Sistem Hazır...</div>
+<div id="debug-msg">Sistem Hazır.</div>
 
 <div id="auth-screen">
     <h2 style="color:var(--red)">🔑 ERİŞİM</h2>
@@ -44,7 +44,7 @@
     </div>
     <div id="player-area">
         <div id="yt-wrap" style="display:none; width:100%; height:100%;"><div id="yt-player"></div></div>
-        <video id="v-player" playsinline crossorigin="anonymous" controlsList="nodownload"></video>
+        <video id="v-player" playsinline crossorigin="anonymous"></video>
         <div class="controls">
             <input type="range" style="width:100%; accent-color:red" id="seek" value="0" step="0.1">
             <div style="display:flex; justify-content:space-between; margin-top:10px">
@@ -52,6 +52,7 @@
                     <button onclick="togglePlay()" id="playBtn">⏸</button>
                     <input type="number" id="jumpMin" style="width:50px; padding:8px" placeholder="DK">
                     <button onclick="doJump()" class="sec-btn">GİT</button>
+                    <button id="ccBtn" class="sec-btn" onclick="toggleCC()" style="display:none;">CC</button>
                 </div>
                 <button class="sec-btn" onclick="toggleFS()">⛶ TAM EKRAN</button>
             </div>
@@ -70,7 +71,7 @@
     const video = document.getElementById('v-player');
     const debug = document.getElementById('debug-msg');
 
-    function log(msg) { debug.innerText = msg; console.log(msg); }
+    function log(msg) { debug.innerText = msg; }
 
     function login() {
         if(document.getElementById('passInp').value === "755654") {
@@ -78,7 +79,7 @@
             document.getElementById('main-wrapper').style.display = 'block';
             if(!firebase.apps.length) firebase.initializeApp(fbConfig);
             loadList();
-        } else { alert("Hatalı!"); }
+        } else { alert("Şifre Hatalı!"); }
     }
 
     function loadList() {
@@ -97,11 +98,14 @@
     }
 
     async function playNow(data) {
-        log("Video Başlatılıyor: " + data.title);
+        log("Başlatılıyor...");
         if(hls) { hls.destroy(); hls = null; }
         video.pause();
         video.src = "";
         
+        // Altyazı temizliği
+        while(video.firstChild) video.removeChild(video.firstChild);
+
         isYT = data.v_url.includes('youtube.com') || data.v_url.includes('youtu.be');
 
         if(isYT) {
@@ -115,51 +119,51 @@
             document.getElementById('yt-wrap').style.display = 'none';
             video.style.display = 'block';
 
-            if (data.v_url.includes('.m3u8')) {
-                log("HLS Akışı Algılandı...");
+            let finalUrl = data.v_url;
+
+            if (finalUrl.includes('.m3u8')) {
+                // PROXY KULLANIMI: Linki CORS engelini aşacak bir köprüye yönlendiriyoruz
+                // Önemli: AllOrigins veya benzeri servisler m3u8 içindeki parçaları bazen çekemez.
+                // Eğer hata devam ederse linkin başına 'https://corsproxy.io/?' eklemeyi deneriz.
+                log("M3U8 HLS Yükleniyor...");
+                
                 if (Hls.isSupported()) {
-                    hls = new Hls({
-                        xhrSetup: function (xhr, url) {
-                            xhr.withCredentials = false; // Bazı sunucular için false olmalı
-                        }
-                    });
-                    hls.loadSource(data.v_url);
+                    hls = new Hls();
+                    hls.loadSource(finalUrl);
                     hls.attachMedia(video);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                        log("Akış Hazır, Oynatılıyor.");
-                        video.play();
-                    });
-                    hls.on(Hls.Events.ERROR, (event, data) => {
-                        log("HLS Hatası: " + data.details);
-                        if (data.fatal) {
-                            switch (data.type) {
-                                case Hls.ErrorTypes.NETWORK_ERROR:
-                                    log("Ağ Hatası! Proxy Gerekebilir.");
-                                    hls.startLoad();
-                                    break;
-                                case Hls.ErrorTypes.MEDIA_ERROR:
-                                    hls.recoverMediaError();
-                                    break;
-                                default:
-                                    hls.destroy();
-                                    break;
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => { log("Oynatılıyor."); video.play(); });
+                    
+                    hls.on(Hls.Events.ERROR, (event, errData) => {
+                        if (errData.fatal) {
+                            log("Hata: " + errData.details + ". Proxy Deneniyor...");
+                            // Fatal hata durumunda proxy ile tekrar dene
+                            if(!finalUrl.includes('corsproxy')) {
+                                finalUrl = "https://corsproxy.io/?" + encodeURIComponent(data.v_url);
+                                hls.loadSource(finalUrl);
                             }
                         }
                     });
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                    video.src = data.v_url;
-                    video.play();
                 }
             } else {
-                video.src = data.v_url;
+                video.src = finalUrl;
                 video.play();
+            }
+
+            // Altyazı Yükleme (VTT)
+            if(data.vtt_url) {
+                document.getElementById('ccBtn').style.display = 'inline-block';
+                const track = document.createElement('track');
+                track.kind = 'captions'; track.label = 'Türkçe'; track.srclang = 'tr'; track.default = true;
+                // Altyazı için proxy
+                track.src = "https://api.allorigins.win/raw?url=" + encodeURIComponent(data.vtt_url);
+                video.appendChild(track);
             }
         }
         syncLoop();
     }
 
     function togglePlay() {
-        if(isYT) { ytPlayer.getPlayerState() === 1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo(); }
+        if(isYT) { (ytPlayer.getPlayerState() === 1) ? ytPlayer.pauseVideo() : ytPlayer.playVideo(); }
         else { video.paused ? video.play() : video.pause(); }
     }
 
@@ -186,6 +190,11 @@
             document.exitFullscreen();
             document.body.classList.remove('full-view');
         }
+    }
+    
+    function toggleCC() {
+        const t = video.textTracks[0];
+        if(t) t.mode = t.mode === 'showing' ? 'hidden' : 'showing';
     }
 </script>
 </body>
