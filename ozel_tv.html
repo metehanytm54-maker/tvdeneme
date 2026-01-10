@@ -3,43 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Özel TV - Proxy & HLS Fix</title>
+    <title>Özel TV - Ultimate Fix</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
     <style>
         :root { --red: #e50914; --bg: #000; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 2px solid var(--red); background: #111; color: white; width: 220px; margin-bottom: 20px; }
-        #main-wrapper { display: none; width: 100%; height: 100%; }
+        #main-wrapper { display: none; width: 100%; height: 100%; position: relative; }
         #playlist-container { width: 280px; height: 100%; background: #0a0a0a; position: fixed; left: 0; top: 0; z-index: 100; border-right: 1px solid #222; overflow-y: auto; transition: 0.3s; }
         .playlist-item { padding: 15px; border-bottom: 1px solid #1a1a1a; cursor: pointer; }
-        #player-area { position: absolute; left: 280px; right: 0; top: 0; bottom: 0; transition: 0.3s; }
+        #player-area { position: absolute; left: 280px; right: 0; top: 0; bottom: 0; transition: 0.3s; background: #000; }
         .full-view #player-area { left: 0; }
         .full-view #playlist-container { transform: translateX(-280px); }
         video { width: 100%; height: 100%; background: #000; object-fit: contain; }
         .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 30px 20px 15px; z-index: 200; }
         button { background: var(--red); border: none; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .sec-btn { background: #333; margin-left: 5px; }
-        #debug-msg { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: lime; padding: 10px; font-size: 11px; z-index: 1000; pointer-events: none; border-radius: 5px; }
+        #status-bar { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 8px 12px; font-size: 11px; border-radius: 5px; z-index: 2000; border: 1px solid #333; }
     </style>
 </head>
 <body>
 
-<div id="debug-msg">Sistem Hazır.</div>
+<div id="status-bar">Sistem Beklemede...</div>
 
 <div id="auth-screen">
-    <h2 style="color:var(--red)">🔑 ERİŞİM</h2>
+    <h2 style="color:var(--red)">🔑 ERİŞİM SİSTEMİ</h2>
     <input type="password" id="passInp" placeholder="Şifre">
-    <button onclick="login()">GİRİŞ</button>
+    <button onclick="login()">SİSTEME GİRİŞ</button>
 </div>
 
 <div id="main-wrapper">
     <div id="playlist-container">
-        <h3 style="padding:15px; color:var(--red);">📺 LİSTEM</h3>
+        <h3 style="padding:15px; color:var(--red);">🎬 LİSTEM</h3>
         <div id="list-items"></div>
     </div>
     <div id="player-area">
@@ -48,13 +46,8 @@
         <div class="controls">
             <input type="range" style="width:100%; accent-color:red" id="seek" value="0" step="0.1">
             <div style="display:flex; justify-content:space-between; margin-top:10px">
-                <div>
-                    <button onclick="togglePlay()" id="playBtn">⏸</button>
-                    <input type="number" id="jumpMin" style="width:50px; padding:8px" placeholder="DK">
-                    <button onclick="doJump()" class="sec-btn">GİT</button>
-                    <button id="ccBtn" class="sec-btn" onclick="toggleCC()" style="display:none;">CC</button>
-                </div>
-                <button class="sec-btn" onclick="toggleFS()">⛶ TAM EKRAN</button>
+                <button onclick="togglePlay()" id="playBtn">⏸ DURDUR</button>
+                <button onclick="toggleFS()" style="background:#333">⛶ TAM EKRAN</button>
             </div>
         </div>
     </div>
@@ -69,9 +62,9 @@
 
     let ytPlayer, hls, isYT = false;
     const video = document.getElementById('v-player');
-    const debug = document.getElementById('debug-msg');
+    const status = document.getElementById('status-bar');
 
-    function log(msg) { debug.innerText = msg; }
+    function log(msg, color="#0f0") { status.innerText = msg; status.style.color = color; }
 
     function login() {
         if(document.getElementById('passInp').value === "755654") {
@@ -98,14 +91,9 @@
     }
 
     async function playNow(data) {
-        log("Başlatılıyor...");
+        log("Yükleniyor...");
         if(hls) { hls.destroy(); hls = null; }
-        video.pause();
-        video.src = "";
-        
-        // Altyazı temizliği
-        while(video.firstChild) video.removeChild(video.firstChild);
-
+        video.pause(); video.src = "";
         isYT = data.v_url.includes('youtube.com') || data.v_url.includes('youtu.be');
 
         if(isYT) {
@@ -119,67 +107,61 @@
             document.getElementById('yt-wrap').style.display = 'none';
             video.style.display = 'block';
 
-            let finalUrl = data.v_url;
-
-            if (finalUrl.includes('.m3u8')) {
-                // PROXY KULLANIMI: Linki CORS engelini aşacak bir köprüye yönlendiriyoruz
-                // Önemli: AllOrigins veya benzeri servisler m3u8 içindeki parçaları bazen çekemez.
-                // Eğer hata devam ederse linkin başına 'https://corsproxy.io/?' eklemeyi deneriz.
-                log("M3U8 HLS Yükleniyor...");
-                
-                if (Hls.isSupported()) {
-                    hls = new Hls();
-                    hls.loadSource(finalUrl);
-                    hls.attachMedia(video);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => { log("Oynatılıyor."); video.play(); });
-                    
-                    hls.on(Hls.Events.ERROR, (event, errData) => {
-                        if (errData.fatal) {
-                            log("Hata: " + errData.details + ". Proxy Deneniyor...");
-                            // Fatal hata durumunda proxy ile tekrar dene
-                            if(!finalUrl.includes('corsproxy')) {
-                                finalUrl = "https://corsproxy.io/?" + encodeURIComponent(data.v_url);
-                                hls.loadSource(finalUrl);
-                            }
-                        }
-                    });
-                }
+            if (data.v_url.includes('.m3u8')) {
+                setupHLS(data.v_url);
             } else {
-                video.src = finalUrl;
+                video.src = data.v_url;
                 video.play();
             }
-
-            // Altyazı Yükleme (VTT)
-            if(data.vtt_url) {
-                document.getElementById('ccBtn').style.display = 'inline-block';
-                const track = document.createElement('track');
-                track.kind = 'captions'; track.label = 'Türkçe'; track.srclang = 'tr'; track.default = true;
-                // Altyazı için proxy
-                track.src = "https://api.allorigins.win/raw?url=" + encodeURIComponent(data.vtt_url);
-                video.appendChild(track);
-            }
         }
-        syncLoop();
+    }
+
+    function setupHLS(url) {
+        if (Hls.isSupported()) {
+            // HLS Yapılandırmasını Güçlendiriyoruz
+            hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 90
+            });
+
+            log("Manifest Okunuyor...");
+            hls.loadSource(url);
+            hls.attachMedia(video);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                log("Bağlantı Başarılı!");
+                video.play();
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            log("Ağ Hatası! Proxy Deneniyor...", "orange");
+                            // Eğer normal link başarısız olursa Proxy kullan
+                            if(!url.includes('corsproxy')) {
+                                const newUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
+                                hls.loadSource(newUrl);
+                            } else {
+                                log("Manifest Yüklenemedi. Link Geçersiz Olabilir.", "red");
+                            }
+                            break;
+                        default:
+                            hls.recoverMediaError();
+                            break;
+                    }
+                }
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.play();
+        }
     }
 
     function togglePlay() {
         if(isYT) { (ytPlayer.getPlayerState() === 1) ? ytPlayer.pauseVideo() : ytPlayer.playVideo(); }
         else { video.paused ? video.play() : video.pause(); }
-    }
-
-    function doJump() {
-        const val = document.getElementById('jumpMin').value * 60;
-        if(isYT) ytPlayer.seekTo(val); else video.currentTime = val;
-    }
-
-    function syncLoop() {
-        const cur = isYT ? ytPlayer?.getCurrentTime() : video.currentTime;
-        const dur = isYT ? ytPlayer?.getDuration() : video.duration;
-        if(dur) { 
-            document.getElementById('seek').max = dur; 
-            document.getElementById('seek').value = cur; 
-        }
-        requestAnimationFrame(syncLoop);
     }
 
     function toggleFS() {
@@ -190,11 +172,6 @@
             document.exitFullscreen();
             document.body.classList.remove('full-view');
         }
-    }
-    
-    function toggleCC() {
-        const t = video.textTracks[0];
-        if(t) t.mode = t.mode === 'showing' ? 'hidden' : 'showing';
     }
 </script>
 </body>
