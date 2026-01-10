@@ -3,75 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Özel TV - HLS & VTT Destekli</title>
+    <title>Özel TV - HLS Fix</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
     
     <style>
         :root { --red: #e50914; --bg: #000; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
-        
-        /* Giriş */
         #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 2px solid var(--red); background: #111; color: white; width: 220px; margin-bottom: 20px; }
-        
         #main-wrapper { display: none; width: 100%; height: 100%; }
-        
-        /* Menü */
         #playlist-container { width: 280px; height: 100%; background: #0a0a0a; position: fixed; left: 0; top: 0; z-index: 100; border-right: 1px solid #222; overflow-y: auto; transition: 0.3s; }
         .playlist-item { padding: 15px; border-bottom: 1px solid #1a1a1a; cursor: pointer; }
-        .playlist-item:hover { background: #111; color: var(--red); }
-        
-        /* Oynatıcı */
         #player-area { position: absolute; left: 280px; right: 0; top: 0; bottom: 0; transition: 0.3s; }
         .full-view #player-area { left: 0; }
         .full-view #playlist-container { transform: translateX(-280px); }
-        
         video { width: 100%; height: 100%; background: #000; object-fit: contain; }
-        
-        /* Altyazı */
-        video::cue { background: rgba(0,0,0,0.8); color: white; font-size: 1.1em; }
-
-        /* Kontroller */
-        .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 30px 20px 15px; z-index: 200; transition: 0.4s; }
-        .ui-hidden .controls { opacity: 0; pointer-events: none; }
-        
-        .progress-bar { width: 100%; accent-color: var(--red); cursor: pointer; }
-        .btns { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 30px 20px 15px; z-index: 200; }
         button { background: var(--red); border: none; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .sec-btn { background: #333; margin-left: 5px; }
-        
-        .jump-input { width: 50px; background: #222; border: 1px solid #444; color: white; text-align: center; padding: 8px; border-radius: 4px; margin: 0 5px; }
+        #debug-msg { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: lime; padding: 10px; font-size: 12px; z-index: 1000; pointer-events: none; max-width: 300px; }
     </style>
 </head>
-<body onmousemove="resetUI()" onclick="resetUI()">
+<body>
+
+<div id="debug-msg">Sistem Hazır...</div>
 
 <div id="auth-screen">
-    <h2 style="color:var(--red)">🔑 ÖZEL ERİŞİM</h2>
+    <h2 style="color:var(--red)">🔑 ERİŞİM</h2>
     <input type="password" id="passInp" placeholder="Şifre">
     <button onclick="login()">GİRİŞ</button>
 </div>
 
 <div id="main-wrapper">
     <div id="playlist-container">
-        <h3 style="padding:15px; color:var(--red); border-bottom: 1px solid #222;">📺 LİSTEM</h3>
+        <h3 style="padding:15px; color:var(--red);">📺 LİSTEM</h3>
         <div id="list-items"></div>
     </div>
-
     <div id="player-area">
         <div id="yt-wrap" style="display:none; width:100%; height:100%;"><div id="yt-player"></div></div>
-        <video id="v-player" playsinline crossorigin="anonymous"></video>
-        
+        <video id="v-player" playsinline crossorigin="anonymous" controlsList="nodownload"></video>
         <div class="controls">
-            <input type="range" class="progress-bar" id="seek" value="0" step="0.1">
-            <div class="btns">
+            <input type="range" style="width:100%; accent-color:red" id="seek" value="0" step="0.1">
+            <div style="display:flex; justify-content:space-between; margin-top:10px">
                 <div>
                     <button onclick="togglePlay()" id="playBtn">⏸</button>
-                    <input type="number" id="jumpMin" class="jump-input" placeholder="DK">
+                    <input type="number" id="jumpMin" style="width:50px; padding:8px" placeholder="DK">
                     <button onclick="doJump()" class="sec-btn">GİT</button>
-                    <button id="ccBtn" class="sec-btn" onclick="toggleCC()" style="display:none;">CC</button>
                 </div>
                 <button class="sec-btn" onclick="toggleFS()">⛶ TAM EKRAN</button>
             </div>
@@ -86,9 +66,11 @@
         projectId: "naberdeneme-ffa04"
     };
 
-    let ytPlayer, hls, isYT = false, hideTimer;
+    let ytPlayer, hls, isYT = false;
     const video = document.getElementById('v-player');
-    const seek = document.getElementById('seek');
+    const debug = document.getElementById('debug-msg');
+
+    function log(msg) { debug.innerText = msg; console.log(msg); }
 
     function login() {
         if(document.getElementById('passInp').value === "755654") {
@@ -97,15 +79,6 @@
             if(!firebase.apps.length) firebase.initializeApp(fbConfig);
             loadList();
         } else { alert("Hatalı!"); }
-    }
-
-    function resetUI() {
-        document.body.classList.remove('ui-hidden');
-        clearTimeout(hideTimer);
-        hideTimer = setTimeout(() => {
-            if(!video.paused || (ytPlayer && ytPlayer.getPlayerState() === 1)) 
-                document.body.classList.add('ui-hidden');
-        }, 3000);
     }
 
     function loadList() {
@@ -124,10 +97,10 @@
     }
 
     async function playNow(data) {
-        // Sıfırlama
+        log("Video Başlatılıyor: " + data.title);
         if(hls) { hls.destroy(); hls = null; }
         video.pause();
-        while(video.firstChild) video.removeChild(video.firstChild);
+        video.src = "";
         
         isYT = data.v_url.includes('youtube.com') || data.v_url.includes('youtu.be');
 
@@ -136,41 +109,51 @@
             video.style.display = 'none';
             const id = data.v_url.split('v=')[1]?.split('&')[0] || data.v_url.split('embed/')[1];
             if(!ytPlayer) {
-                ytPlayer = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:id, playerVars:{'controls':0, 'autoplay':1} });
+                ytPlayer = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:id, playerVars:{'autoplay':1} });
             } else { ytPlayer.loadVideoById(id); }
-            document.getElementById('ccBtn').style.display = 'none';
         } else {
             document.getElementById('yt-wrap').style.display = 'none';
             video.style.display = 'block';
 
-            // M3U8 Oynatma Mantığı
             if (data.v_url.includes('.m3u8')) {
+                log("HLS Akışı Algılandı...");
                 if (Hls.isSupported()) {
-                    hls = new Hls();
+                    hls = new Hls({
+                        xhrSetup: function (xhr, url) {
+                            xhr.withCredentials = false; // Bazı sunucular için false olmalı
+                        }
+                    });
                     hls.loadSource(data.v_url);
                     hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        log("Akış Hazır, Oynatılıyor.");
+                        video.play();
+                    });
+                    hls.on(Hls.Events.ERROR, (event, data) => {
+                        log("HLS Hatası: " + data.details);
+                        if (data.fatal) {
+                            switch (data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    log("Ağ Hatası! Proxy Gerekebilir.");
+                                    hls.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    hls.recoverMediaError();
+                                    break;
+                                default:
+                                    hls.destroy();
+                                    break;
+                            }
+                        }
+                    });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = data.v_url;
+                    video.play();
                 }
             } else {
                 video.src = data.v_url;
+                video.play();
             }
-
-            // Altyazı (Proxy ile çekme)
-            if(data.vtt_url) {
-                document.getElementById('ccBtn').style.display = 'inline-block';
-                try {
-                    const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(data.vtt_url);
-                    const res = await fetch(proxy);
-                    const blob = await res.blob();
-                    const track = document.createElement('track');
-                    track.kind = 'captions'; track.label = 'Türkçe'; track.srclang = 'tr';
-                    track.src = URL.createObjectURL(blob);
-                    track.default = true;
-                    video.appendChild(track);
-                } catch(e) { console.error("CC Hatası"); }
-            }
-            video.play();
         }
         syncLoop();
     }
@@ -188,17 +171,11 @@
     function syncLoop() {
         const cur = isYT ? ytPlayer?.getCurrentTime() : video.currentTime;
         const dur = isYT ? ytPlayer?.getDuration() : video.duration;
-        if(dur) { seek.max = dur; seek.value = cur; }
-        const playing = isYT ? (ytPlayer?.getPlayerState() === 1) : !video.paused;
-        document.getElementById('playBtn').innerText = playing ? "⏸" : "▶";
+        if(dur) { 
+            document.getElementById('seek').max = dur; 
+            document.getElementById('seek').value = cur; 
+        }
         requestAnimationFrame(syncLoop);
-    }
-
-    seek.oninput = () => { if(isYT) ytPlayer.seekTo(seek.value); else video.currentTime = seek.value; };
-
-    function toggleCC() {
-        const t = video.textTracks[0];
-        if(t) t.mode = t.mode === 'showing' ? 'hidden' : 'showing';
     }
 
     function toggleFS() {
