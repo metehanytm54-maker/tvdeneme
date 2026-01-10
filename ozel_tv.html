@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Özel TV Oynatıcı</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        /* TV.html ile aynı stil kodlarını içerir */
+        body { background: #000; color: white; font-family: sans-serif; margin: 0; overflow: hidden; transition: cursor 0.3s; }
+        #playlist-container, .controls-bar { transition: opacity 0.5s, visibility 0.5s; opacity: 1; visibility: visible; }
+        .ui-hidden-active #playlist-container, .ui-hidden-active .controls-bar { opacity: 0 !important; visibility: hidden !important; }
+        .ui-hidden-active { cursor: none !important; }
+        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
+        .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; outline: none; }
+        .playlist-item:focus { border-color: #e50914; background: #222; }
+        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: margin 0.3s; }
+        .is-fullscreen #player-main { margin-left: 0; width: 100vw; }
+        .is-fullscreen #playlist-container { transform: translateX(-280px); }
+        .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        #yt-shield { position: absolute; width: 100%; height: 100%; z-index: 5; cursor: pointer; display: none; }
+        .controls-bar { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.95)); padding: 50px 20px 20px; display: flex; flex-direction: column; gap: 15px; z-index: 20; }
+        input[type="range"] { flex-grow: 1; accent-color: #e50914; }
+        #password-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        #password-overlay input { padding: 15px; font-size: 24px; text-align: center; border-radius: 10px; margin-bottom: 20px; background: #222; color: white; border:none; }
+        button { background: #e50914; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body onmousemove="showUI()" onmousedown="showUI()" onkeydown="showUI()">
+
+    <div id="password-overlay">
+        <h2>🔒 Özel Giriş</h2>
+        <input type="password" id="passInput" placeholder="Şifre">
+        <button onclick="checkPass()">AÇ</button>
+    </div>
+
+    <div id="playlist-container">
+        <h3 style="color:#e50914">🌟 ÖZEL TV</h3>
+        <div id="list-items">Yükleniyor...</div>
+    </div>
+
+    <div id="player-main">
+        <div id="yt-shield" onclick="togglePlay()"></div>
+        <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
+        <div id="file-layer" class="media-layer"><video id="mainVideo" playsinline onclick="togglePlay()"></video></div>
+        <audio id="bgAudio"></audio>
+
+        <div class="controls-bar">
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span id="currTime">00:00</span>
+                <input type="range" id="progressBar" value="0" min="0" step="0.1" oninput="manualSeek(this.value)">
+                <span id="totalTime">00:00</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; gap:10px;">
+                    <button id="playBtn" onclick="togglePlay()">⏸ DURDUR</button>
+                    <button class="btn-fs" onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // FIREBASE CONFIG AYNI KALIYOR
+        const config = {
+            apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
+            databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
+            projectId: "naberdeneme-ffa04"
+        };
+        firebase.initializeApp(config);
+        
+        let ytPlayer, isYouTube = false, pendingVideo = null, idleTimer;
+        const videoEl = document.getElementById('mainVideo');
+        const audioEl = document.getElementById('bgAudio');
+        const progBar = document.getElementById('progressBar');
+
+        function showUI() {
+            clearTimeout(idleTimer);
+            document.body.classList.remove('ui-hidden-active');
+            if(!videoEl.paused || (ytPlayer && ytPlayer.getPlayerState() === 1)) {
+                idleTimer = setTimeout(() => document.body.classList.add('ui-hidden-active'), 5000);
+            }
+        }
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('yt-player', {
+                height: '100%', width: '100%',
+                playerVars: { 'controls': 0, 'rel': 0, 'enablejsapi': 1, 'autoplay': 1 },
+                events: { 'onReady': () => loadPlaylist() }
+            });
+        }
+
+        function loadPlaylist() {
+            // ÖNEMLİ: BURASI ozel_videolar DÜĞÜMÜNDEN ÇEKER
+            firebase.database().ref('ozel_videolar').on('value', snap => {
+                const container = document.getElementById('list-items');
+                container.innerHTML = "";
+                snap.forEach(child => {
+                    const v = child.val();
+                    const div = document.createElement('div');
+                    div.className = 'playlist-item';
+                    div.tabIndex = "0";
+                    div.innerHTML = `<b>${v.title}</b> ${v.password ? '🔒' : ''}`;
+                    div.onclick = () => {
+                        pendingVideo = v;
+                        if(v.password) {
+                            document.getElementById('password-overlay').style.display = 'flex';
+                        } else {
+                            startMedia(v);
+                        }
+                    };
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        function checkPass() {
+            if(document.getElementById('passInput').value === pendingVideo.password) {
+                document.getElementById('password-overlay').style.display = 'none';
+                startMedia(pendingVideo);
+            } else { alert("Hatalı!"); }
+        }
+
+        function startMedia(v) {
+            videoEl.pause(); if(ytPlayer?.pauseVideo) ytPlayer.pauseVideo(); audioEl.pause();
+            isYouTube = v.v_url.includes('youtube') || v.v_url.includes('youtu.be');
+            if(isYouTube) {
+                document.getElementById('yt-layer').style.display = 'block';
+                document.getElementById('yt-shield').style.display = 'block';
+                document.getElementById('file-layer').style.display = 'none';
+                const vidId = v.v_url.split('embed/')[1] || v.v_url.split('v=')[1];
+                ytPlayer.loadVideoById(vidId);
+            } else {
+                document.getElementById('yt-layer').style.display = 'none';
+                document.getElementById('yt-shield').style.display = 'none';
+                document.getElementById('file-layer').style.display = 'block';
+                videoEl.src = v.v_url; videoEl.play();
+            }
+            audioEl.src = v.a_url || ""; if(v.a_url) audioEl.play();
+            document.getElementById('playBtn').innerText = "⏸ DURDUR";
+            showUI(); requestAnimationFrame(syncUI);
+        }
+
+        function togglePlay() {
+            const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused;
+            if(playing) {
+                if(isYouTube) ytPlayer.pauseVideo(); else videoEl.pause();
+                audioEl.pause(); document.getElementById('playBtn').innerText = "▶ OYNAT";
+                showUI();
+            } else {
+                if(isYouTube) ytPlayer.playVideo(); else videoEl.play();
+                if(audioEl.src) audioEl.play(); document.getElementById('playBtn').innerText = "⏸ DURDUR";
+                requestAnimationFrame(syncUI);
+            }
+        }
+
+        function manualSeek(val) {
+            const t = parseFloat(val);
+            if(isYouTube) ytPlayer.seekTo(t); else videoEl.currentTime = t;
+            if(audioEl.src) audioEl.currentTime = t;
+        }
+
+        function syncUI() {
+            const cur = isYouTube ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+            const dur = isYouTube ? ytPlayer.getDuration() : videoEl.duration;
+            if(dur > 0) {
+                progBar.max = dur; progBar.value = cur;
+                document.getElementById('currTime').innerText = formatTime(cur);
+                document.getElementById('totalTime').innerText = formatTime(dur);
+            }
+            if(audioEl.src && !audioEl.paused && Math.abs(cur - audioEl.currentTime) > 0.4) audioEl.currentTime = cur;
+            if(isYouTube ? (ytPlayer.getPlayerState() === 1) : !videoEl.paused) requestAnimationFrame(syncUI);
+        }
+
+        function toggleFullScreen() {
+            const pm = document.body;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (pm.requestFullscreen) pm.requestFullscreen();
+                else if (pm.webkitRequestFullscreen) pm.webkitRequestFullscreen();
+                pm.classList.add('is-fullscreen');
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                pm.classList.remove('is-fullscreen');
+            }
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s/60); const sec = Math.floor(s%60);
+            return (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec);
+        }
+    </script>
+</body>
+</html>
