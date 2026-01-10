@@ -2,13 +2,12 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Özel TV Oynatıcı</title>
+    <title>Özel TV Oynatıcı - Altyazı & Zaman Kontrolü</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { background: #000; color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
-        /* Giriş Ekranı */
         #auth-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         #auth-screen input { padding: 20px; font-size: 30px; text-align: center; border-radius: 12px; border: 2px solid #e50914; background: #111; color: white; width: 300px; margin-bottom: 20px; }
         
@@ -16,17 +15,29 @@
         #playlist-container, .controls-bar { transition: opacity 0.5s, visibility 0.5s; opacity: 1; visibility: visible; }
         .ui-hidden-active #playlist-container, .ui-hidden-active .controls-bar { opacity: 0 !important; visibility: hidden !important; }
         .ui-hidden-active { cursor: none !important; }
+        
         #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: #111; position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
         .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; outline: none; }
         .playlist-item:focus { border-color: #e50914; background: #222; }
+        
         #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; transition: margin 0.3s; }
         .is-fullscreen #player-main { margin-left: 0; width: 100vw; }
         .is-fullscreen #playlist-container { transform: translateX(-280px); }
+        
         .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
         video { width: 100%; height: 100%; object-fit: contain; }
+
+        /* Altyazı Stili */
+        video::cue { background: rgba(0,0,0,0.8); color: #fff; font-size: 20px; }
+
         .controls-bar { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.95)); padding: 50px 20px 20px; z-index: 20; }
         input[type="range"] { width: 100%; accent-color: #e50914; cursor: pointer; }
-        button { background: #e50914; border: none; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        
+        .btn-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; }
+        button { background: #e50914; border: none; color: white; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        
+        .time-jump-box { display: flex; align-items: center; background: #222; padding: 5px; border-radius: 5px; border: 1px solid #444; }
+        .time-jump-box input { background: transparent; border: none; color: white; width: 60px; text-align: center; font-size: 16px; outline: none; }
     </style>
 </head>
 <body onmousemove="showUI()">
@@ -44,12 +55,22 @@
     </div>
     <div id="player-main">
         <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
-        <div id="file-layer" class="media-layer"><video id="mainVideo" playsinline onclick="togglePlay()"></video></div>
+        <div id="file-layer" class="media-layer">
+            <video id="mainVideo" playsinline onclick="togglePlay()">
+                </video>
+        </div>
         <audio id="bgAudio"></audio>
+        
         <div class="controls-bar">
             <input type="range" id="progressBar" value="0" min="0" step="0.1" oninput="manualSeek(this.value)">
-            <div style="display:flex; justify-content:space-between; margin-top:10px">
-                <button id="playBtn" onclick="togglePlay()">⏸ DURDUR</button>
+            <div class="btn-row">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button id="playBtn" onclick="togglePlay()">⏸ DURDUR</button>
+                    <div class="time-jump-box">
+                        <input type="number" id="jumpMin" placeholder="Dk" min="0">
+                        <button onclick="jumpToTime()" style="padding: 5px 10px; font-size: 12px; background: #444;">GİT</button>
+                    </div>
+                </div>
                 <button onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
             </div>
         </div>
@@ -85,8 +106,6 @@
         idleTimer = setTimeout(() => document.body.classList.add('ui-hidden-active'), 5000);
     }
 
-    function onYouTubeIframeAPIReady() { /* API Otomatik Yüklenir */ }
-
     function loadPlaylist() {
         firebase.database().ref('ozel_videolar').on('value', snap => {
             const container = document.getElementById('list-items');
@@ -103,23 +122,52 @@
     }
 
     function startMedia(v) {
+        // Eski altyazıları temizle
+        while (videoEl.firstChild) { videoEl.removeChild(videoEl.firstChild); }
+
         isYouTube = v.v_url.includes('youtube') || v.v_url.includes('youtu.be');
+        
         if(isYouTube) {
             document.getElementById('yt-layer').style.display = 'block';
             document.getElementById('file-layer').style.display = 'none';
+            const vidId = v.v_url.split('v=')[1] || v.v_url.split('embed/')[1];
+            
             if(!ytPlayer) {
                 ytPlayer = new YT.Player('yt-player', {
                     height: '100%', width: '100%',
-                    videoId: v.v_url.split('v=')[1] || v.v_url.split('embed/')[1],
-                    playerVars: { 'controls': 0, 'autoplay': 1 }
+                    videoId: vidId,
+                    playerVars: { 'controls': 0, 'autoplay': 1, 'cc_load_policy': 1 }
                 });
-            } else { ytPlayer.loadVideoById(v.v_url.split('v=')[1] || v.v_url.split('embed/')[1]); }
+            } else { ytPlayer.loadVideoById(vidId); }
         } else {
             document.getElementById('yt-layer').style.display = 'none';
             document.getElementById('file-layer').style.display = 'block';
-            videoEl.src = v.v_url; videoEl.play();
+            
+            // Eğer Firebase'de 'vtt_url' diye bir alan varsa altyazı ekle
+            if(v.vtt_url) {
+                const track = document.createElement('track');
+                track.kind = 'captions';
+                track.label = 'Türkçe';
+                track.srclang = 'tr';
+                track.src = v.vtt_url;
+                track.default = true;
+                videoEl.appendChild(track);
+            }
+
+            videoEl.src = v.v_url;
+            videoEl.play();
         }
         requestAnimationFrame(syncUI);
+    }
+
+    // İSTEDİĞİN DAKİKAYA GİTME FONKSİYONU
+    function jumpToTime() {
+        const mins = document.getElementById('jumpMin').value;
+        if(mins === "" || mins < 0) return;
+        
+        const totalSeconds = mins * 60;
+        manualSeek(totalSeconds);
+        document.getElementById('jumpMin').value = ""; // Kutuyu temizle
     }
 
     function togglePlay() {
