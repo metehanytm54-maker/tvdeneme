@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Özel İçerik Yönetimi</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; padding: 20px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; }
+        input { width: 93%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; }
+        button { width: 100%; padding: 12px; background: #3b82f6; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .list-item { background: #334155; padding: 10px; margin-top: 10px; border-radius: 6px; display: flex; justify-content: space-between; }
+        .del-btn { background: #ef4444; width: auto; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🌟 Özel İçerik Ekle</h2>
+    <input type="text" id="title" placeholder="Video Başlığı">
+    <input type="text" id="v_url" placeholder="Video URL (MP4 veya YouTube)">
+    <input type="text" id="a_url" placeholder="Ses URL (MP3 - Opsiyonel)">
+    <input type="text" id="pass" placeholder="Şifre (Boş bırakılırsa şifresiz)">
+    <button onclick="saveVideo()">LİSTEYE EKLE</button>
+
+    <hr style="margin:20px 0; border-color:#475569;">
+    <h3>Özel Listedeki Videolar</h3>
+    <div id="ozel-liste"></div>
+</div>
+
+<script>
+    const config = {
+        apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
+        databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
+        projectId: "naberdeneme-ffa04"
+    };
+    firebase.initializeApp(config);
+    const db = firebase.database().ref('ozel_videolar'); // ÖZEL DÜĞÜM
+
+    function saveVideo() {
+        const data = {
+            title: document.getElementById('title').value,
+            v_url: document.getElementById('v_url').value,
+            a_url: document.getElementById('a_url').value,
+            password: document.getElementById('pass').value
+        };
+        db.push(data);
+        alert("Özel listeye eklendi!");
+        document.querySelectorAll('input').forEach(i => i.value = "");
+    }
+
+    db.on('value', snap => {
+        const container = document.getElementById('ozel-liste');
+        container.innerHTML = "";
+        snap.forEach(child => {
+            const v = child.val();
+            container.innerHTML += `<div class="list-item">
+                <span>${v.title}</span>
+                <button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button>
+            </div>`;
+        });
+    });
+
+    function deleteVideo(key) { if(confirm("Silinsin mi?")) db.child(key).remove(); }
+</script>
+</body>
+</html>
