@@ -13,8 +13,9 @@
         .card { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; }
         input { width: 93%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; }
         button { width: 100%; padding: 12px; background: #3b82f6; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .list-item { background: #334155; padding: 10px; margin-top: 10px; border-radius: 6px; display: flex; justify-content: space-between; }
+        .list-item { background: #334155; padding: 10px; margin-top: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
         .del-btn { background: #ef4444; width: auto; padding: 5px 10px; }
+        h4 { margin: 5px 0; color: #94a3b8; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -28,11 +29,19 @@
 <div id="main-content">
     <div class="card">
         <h2>🌟 Özel İçerik Ekle</h2>
-        <input type="text" id="title" placeholder="Video Başlığı">
-        <input type="text" id="v_url" placeholder="Video URL (MP4 veya YouTube)">
-        <input type="text" id="a_url" placeholder="Ses URL (MP3 - Opsiyonel)">
-        <input type="text" id="pass" placeholder="Video Şifresi (Opsiyonel)">
-        <button onclick="saveVideo()">LİSTEYE EKLE</button>
+        <h4>Video Adı</h4>
+        <input type="text" id="title" placeholder="Örn: Inception">
+        <h4>Video URL</h4>
+        <input type="text" id="v_url" placeholder="MP4 veya YouTube Linki">
+        <h4>Altyazı URL (Opsiyonel)</h4>
+        <input type="text" id="vtt_url" placeholder=".vtt uzantılı altyazı linki">
+        <h4>Ses URL (Opsiyonel)</h4>
+        <input type="text" id="a_url" placeholder="Harici Ses Dosyası">
+        <h4>Video Şifresi</h4>
+        <input type="text" id="pass" placeholder="Bu videoya özel şifre (isteğe bağlı)">
+        
+        <button onclick="saveVideo()" style="margin-top:10px; background:#10b981;">LİSTEYE EKLE</button>
+        
         <hr style="margin:20px 0; border-color:#475569;">
         <h3>Özel Listedeki Videolar</h3>
         <div id="ozel-liste"></div>
@@ -61,11 +70,12 @@
             const data = {
                 title: document.getElementById('title').value,
                 v_url: document.getElementById('v_url').value,
+                vtt_url: document.getElementById('vtt_url').value, // Yeni Alan
                 a_url: document.getElementById('a_url').value,
                 password: document.getElementById('pass').value
             };
             db.push(data);
-            alert("Eklendi!");
+            alert("Özel Listeye Başarıyla Eklendi!");
             document.querySelectorAll('#main-content input').forEach(i => i.value = "");
         }
 
@@ -74,11 +84,14 @@
             container.innerHTML = "";
             snap.forEach(child => {
                 const v = child.val();
-                container.innerHTML += `<div class="list-item"><span>${v.title}</span><button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button></div>`;
+                container.innerHTML += `<div class="list-item">
+                    <span>${v.title} ${v.vtt_url ? '📝' : ''}</span>
+                    <button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button>
+                </div>`;
             });
         });
 
-        window.deleteVideo = function(key) { if(confirm("Silinsin mi?")) db.child(key).remove(); }
+        window.deleteVideo = function(key) { if(confirm("Bu videoyu listeden silmek istediğinize emin misiniz?")) db.child(key).remove(); }
     }
 </script>
 </body>
