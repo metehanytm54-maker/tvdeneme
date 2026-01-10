@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Özel İçerik Yönetimi - Admin</title>
+    <title>Özel İçerik Yönetimi - Düzenleme Destekli</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
@@ -10,45 +10,74 @@
         #auth-screen { position: fixed; inset: 0; background: #0f172a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: white; margin-bottom: 20px; }
         #main-content { display: none; padding: 20px; }
-        .card { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; }
-        input { width: 93%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; }
-        button { width: 100%; padding: 12px; background: #3b82f6; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .list-item { background: #334155; padding: 10px; margin-top: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .del-btn { background: #ef4444; width: auto; padding: 5px 10px; }
-        h4 { margin: 5px 0; color: #94a3b8; font-size: 12px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 600px; margin: auto; }
+        .input-group { margin-bottom: 10px; }
+        label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 5px; margin-left: 5px; }
+        input { width: calc(100% - 24px); padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 5px; }
+        
+        .btn-container { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 12px; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        #save-btn { background: #10b981; }
+        #update-btn { background: #3b82f6; display: none; }
+        #cancel-btn { background: #64748b; display: none; }
+        
+        .list-item { background: #334155; padding: 12px; margin-top: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .list-info { flex: 1; }
+        .list-info b { display: block; color: #fff; }
+        .list-info span { font-size: 11px; color: #cbd5e1; }
+        .action-btns { display: flex; gap: 5px; }
+        .edit-btn { background: #f59e0b; padding: 6px 12px; font-size: 12px; }
+        .del-btn { background: #ef4444; padding: 6px 12px; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div id="auth-screen">
-    <h2>🔑 Admin Girişi</h2>
+    <h2>🔑 Özel Admin Girişi</h2>
     <input type="password" id="adminPass" placeholder="Giriş Şifresi">
-    <button style="width:200px" onclick="verifyAdmin()">GİRİŞ YAP</button>
+    <button style="width:200px; background:#3b82f6;" onclick="verifyAdmin()">GİRİŞ YAP</button>
 </div>
 
 <div id="main-content">
     <div class="card">
-        <h2>🌟 Özel İçerik Ekle</h2>
-        <h4>Video Adı</h4>
-        <input type="text" id="title" placeholder="Örn: Inception">
-        <h4>Video URL</h4>
-        <input type="text" id="v_url" placeholder="MP4 veya YouTube Linki">
-        <h4>Altyazı URL (Opsiyonel)</h4>
-        <input type="text" id="vtt_url" placeholder=".vtt uzantılı altyazı linki">
-        <h4>Ses URL (Opsiyonel)</h4>
-        <input type="text" id="a_url" placeholder="Harici Ses Dosyası">
-        <h4>Video Şifresi</h4>
-        <input type="text" id="pass" placeholder="Bu videoya özel şifre (isteğe bağlı)">
+        <h2 id="form-title">🌟 Yeni İçerik Ekle</h2>
         
-        <button onclick="saveVideo()" style="margin-top:10px; background:#10b981;">LİSTEYE EKLE</button>
-        
-        <hr style="margin:20px 0; border-color:#475569;">
-        <h3>Özel Listedeki Videolar</h3>
-        <div id="ozel-liste"></div>
+        <div class="input-group">
+            <label>Video Başlığı</label>
+            <input type="text" id="title" placeholder="Film/Video Adı">
+        </div>
+        <div class="input-group">
+            <label>Video URL (MP4 / YouTube)</label>
+            <input type="text" id="v_url" placeholder="https://...">
+        </div>
+        <div class="input-group">
+            <label>Altyazı URL (.vtt)</label>
+            <input type="text" id="vtt_url" placeholder="https://.../altyazi.vtt">
+        </div>
+        <div class="input-group">
+            <label>Ses URL (Opsiyonel)</label>
+            <input type="text" id="a_url" placeholder="https://.../ses.mp3">
+        </div>
+        <div class="input-group">
+            <label>Özel Şifre (Opsiyonel)</label>
+            <input type="text" id="pass" placeholder="Boş bırakılabilir">
+        </div>
+
+        <div class="btn-container">
+            <button id="save-btn" onclick="saveVideo()">LİSTEYE EKLE</button>
+            <button id="update-btn" onclick="updateVideo()">GÜNCELLEMEYİ KAYDET</button>
+            <button id="cancel-btn" onclick="resetForm()">İPTAL</button>
+        </div>
+
+        <hr style="margin:25px 0; border-color:#475569;">
+        <h3>📺 Mevcut Özel Liste</h3>
+        <div id="ozel-liste">Yükleniyor...</div>
     </div>
 </div>
 
 <script>
+    let editKey = null; // Düzenlenen videonun ID'sini tutar
+
     function verifyAdmin() {
         if(document.getElementById('adminPass').value === "755654") {
             document.getElementById('auth-screen').style.display = "none";
@@ -66,32 +95,83 @@
         if (!firebase.apps.length) firebase.initializeApp(config);
         const db = firebase.database().ref('ozel_videolar');
 
+        // VERİ EKLEME
         window.saveVideo = function() {
-            const data = {
-                title: document.getElementById('title').value,
-                v_url: document.getElementById('v_url').value,
-                vtt_url: document.getElementById('vtt_url').value, // Yeni Alan
-                a_url: document.getElementById('a_url').value,
-                password: document.getElementById('pass').value
-            };
+            const data = getFormData();
+            if(!data.title || !data.v_url) return alert("Başlık ve Video URL zorunludur!");
             db.push(data);
-            alert("Özel Listeye Başarıyla Eklendi!");
-            document.querySelectorAll('#main-content input').forEach(i => i.value = "");
+            resetForm();
         }
 
+        // LİSTELEME
         db.on('value', snap => {
             const container = document.getElementById('ozel-liste');
             container.innerHTML = "";
             snap.forEach(child => {
                 const v = child.val();
-                container.innerHTML += `<div class="list-item">
-                    <span>${v.title} ${v.vtt_url ? '📝' : ''}</span>
-                    <button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button>
-                </div>`;
+                container.innerHTML += `
+                    <div class="list-item">
+                        <div class="list-info">
+                            <b>${v.title}</b>
+                            <span>${v.vtt_url ? '📝 Altyazı Var' : '🚫 Altyazı Yok'}</span>
+                        </div>
+                        <div class="action-btns">
+                            <button class="edit-btn" onclick="prepareEdit('${child.key}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">Düzenle</button>
+                            <button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button>
+                        </div>
+                    </div>`;
             });
         });
 
-        window.deleteVideo = function(key) { if(confirm("Bu videoyu listeden silmek istediğinize emin misiniz?")) db.child(key).remove(); }
+        // DÜZENLEME MODUNU AÇMA
+        window.prepareEdit = function(key, data) {
+            editKey = key;
+            document.getElementById('title').value = data.title || "";
+            document.getElementById('v_url').value = data.v_url || "";
+            document.getElementById('vtt_url').value = data.vtt_url || "";
+            document.getElementById('a_url').value = data.a_url || "";
+            document.getElementById('pass').value = data.password || "";
+
+            document.getElementById('form-title').innerText = "📝 İçeriği Düzenle";
+            document.getElementById('save-btn').style.display = "none";
+            document.getElementById('update-btn').style.display = "block";
+            document.getElementById('cancel-btn').style.display = "block";
+            window.scrollTo(0,0);
+        }
+
+        // GÜNCELLEME
+        window.updateVideo = function() {
+            if(!editKey) return;
+            const data = getFormData();
+            db.child(editKey).update(data).then(() => {
+                alert("Başarıyla Güncellendi!");
+                resetForm();
+            });
+        }
+
+        // SİLME
+        window.deleteVideo = function(key) { 
+            if(confirm("Bu içeriği tamamen silmek istediğine emin misin?")) db.child(key).remove(); 
+        }
+    }
+
+    function getFormData() {
+        return {
+            title: document.getElementById('title').value,
+            v_url: document.getElementById('v_url').value,
+            vtt_url: document.getElementById('vtt_url').value,
+            a_url: document.getElementById('a_url').value,
+            password: document.getElementById('pass').value
+        };
+    }
+
+    function resetForm() {
+        editKey = null;
+        document.querySelectorAll('input').forEach(i => { if(i.id !== "adminPass") i.value = "" });
+        document.getElementById('form-title').innerText = "🌟 Yeni İçerik Ekle";
+        document.getElementById('save-btn').style.display = "block";
+        document.getElementById('update-btn').style.display = "none";
+        document.getElementById('cancel-btn').style.display = "none";
     }
 </script>
 </body>
