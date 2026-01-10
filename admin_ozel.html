@@ -2,11 +2,14 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Özel İçerik Yönetimi</title>
+    <title>Özel İçerik Yönetimi - Admin</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { background: #0f172a; color: white; font-family: sans-serif; padding: 20px; }
+        body { background: #0f172a; color: white; font-family: sans-serif; margin: 0; }
+        #auth-screen { position: fixed; inset: 0; background: #0f172a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: white; margin-bottom: 20px; }
+        #main-content { display: none; padding: 20px; }
         .card { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; }
         input { width: 93%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; }
         button { width: 100%; padding: 12px; background: #3b82f6; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -16,53 +19,67 @@
 </head>
 <body>
 
-<div class="card">
-    <h2>🌟 Özel İçerik Ekle</h2>
-    <input type="text" id="title" placeholder="Video Başlığı">
-    <input type="text" id="v_url" placeholder="Video URL (MP4 veya YouTube)">
-    <input type="text" id="a_url" placeholder="Ses URL (MP3 - Opsiyonel)">
-    <input type="text" id="pass" placeholder="Şifre (Boş bırakılırsa şifresiz)">
-    <button onclick="saveVideo()">LİSTEYE EKLE</button>
+<div id="auth-screen">
+    <h2>🔑 Admin Girişi</h2>
+    <input type="password" id="adminPass" placeholder="Giriş Şifresi">
+    <button style="width:200px" onclick="verifyAdmin()">GİRİŞ YAP</button>
+</div>
 
-    <hr style="margin:20px 0; border-color:#475569;">
-    <h3>Özel Listedeki Videolar</h3>
-    <div id="ozel-liste"></div>
+<div id="main-content">
+    <div class="card">
+        <h2>🌟 Özel İçerik Ekle</h2>
+        <input type="text" id="title" placeholder="Video Başlığı">
+        <input type="text" id="v_url" placeholder="Video URL (MP4 veya YouTube)">
+        <input type="text" id="a_url" placeholder="Ses URL (MP3 - Opsiyonel)">
+        <input type="text" id="pass" placeholder="Video Şifresi (Opsiyonel)">
+        <button onclick="saveVideo()">LİSTEYE EKLE</button>
+        <hr style="margin:20px 0; border-color:#475569;">
+        <h3>Özel Listedeki Videolar</h3>
+        <div id="ozel-liste"></div>
+    </div>
 </div>
 
 <script>
-    const config = {
-        apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
-        databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
-        projectId: "naberdeneme-ffa04"
-    };
-    firebase.initializeApp(config);
-    const db = firebase.database().ref('ozel_videolar'); // ÖZEL DÜĞÜM
-
-    function saveVideo() {
-        const data = {
-            title: document.getElementById('title').value,
-            v_url: document.getElementById('v_url').value,
-            a_url: document.getElementById('a_url').value,
-            password: document.getElementById('pass').value
-        };
-        db.push(data);
-        alert("Özel listeye eklendi!");
-        document.querySelectorAll('input').forEach(i => i.value = "");
+    function verifyAdmin() {
+        if(document.getElementById('adminPass').value === "755654") {
+            document.getElementById('auth-screen').style.display = "none";
+            document.getElementById('main-content').style.display = "block";
+            initFirebase();
+        } else { alert("Hatalı Şifre!"); }
     }
 
-    db.on('value', snap => {
-        const container = document.getElementById('ozel-liste');
-        container.innerHTML = "";
-        snap.forEach(child => {
-            const v = child.val();
-            container.innerHTML += `<div class="list-item">
-                <span>${v.title}</span>
-                <button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button>
-            </div>`;
-        });
-    });
+    function initFirebase() {
+        const config = {
+            apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
+            databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
+            projectId: "naberdeneme-ffa04"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(config);
+        const db = firebase.database().ref('ozel_videolar');
 
-    function deleteVideo(key) { if(confirm("Silinsin mi?")) db.child(key).remove(); }
+        window.saveVideo = function() {
+            const data = {
+                title: document.getElementById('title').value,
+                v_url: document.getElementById('v_url').value,
+                a_url: document.getElementById('a_url').value,
+                password: document.getElementById('pass').value
+            };
+            db.push(data);
+            alert("Eklendi!");
+            document.querySelectorAll('#main-content input').forEach(i => i.value = "");
+        }
+
+        db.on('value', snap => {
+            const container = document.getElementById('ozel-liste');
+            container.innerHTML = "";
+            snap.forEach(child => {
+                const v = child.val();
+                container.innerHTML += `<div class="list-item"><span>${v.title}</span><button class="del-btn" onclick="deleteVideo('${child.key}')">Sil</button></div>`;
+            });
+        });
+
+        window.deleteVideo = function(key) { if(confirm("Silinsin mi?")) db.child(key).remove(); }
+    }
 </script>
 </body>
 </html>
