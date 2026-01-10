@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Özel TV - Ultimate Fix</title>
+    <title>Özel TV - Nihai Çözüm</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://www.youtube.com/iframe_api"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         :root { --red: #e50914; --bg: #000; }
@@ -15,40 +14,35 @@
         #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 2px solid var(--red); background: #111; color: white; width: 220px; margin-bottom: 20px; }
         #main-wrapper { display: none; width: 100%; height: 100%; position: relative; }
         #playlist-container { width: 280px; height: 100%; background: #0a0a0a; position: fixed; left: 0; top: 0; z-index: 100; border-right: 1px solid #222; overflow-y: auto; transition: 0.3s; }
-        .playlist-item { padding: 15px; border-bottom: 1px solid #1a1a1a; cursor: pointer; }
+        .playlist-item { padding: 15px; border-bottom: 1px solid #1a1a1a; cursor: pointer; font-size: 14px; }
         #player-area { position: absolute; left: 280px; right: 0; top: 0; bottom: 0; transition: 0.3s; background: #000; }
         .full-view #player-area { left: 0; }
         .full-view #playlist-container { transform: translateX(-280px); }
         video { width: 100%; height: 100%; background: #000; object-fit: contain; }
         .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 30px 20px 15px; z-index: 200; }
         button { background: var(--red); border: none; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        #status-bar { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 8px 12px; font-size: 11px; border-radius: 5px; z-index: 2000; border: 1px solid #333; }
+        #status-bar { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 8px 12px; font-size: 11px; border-radius: 5px; z-index: 2000; }
     </style>
 </head>
 <body>
 
-<div id="status-bar">Sistem Beklemede...</div>
+<div id="status-bar">Sistem Hazır</div>
 
 <div id="auth-screen">
-    <h2 style="color:var(--red)">🔑 ERİŞİM SİSTEMİ</h2>
+    <h2 style="color:var(--red)">🔑 ERİŞİM</h2>
     <input type="password" id="passInp" placeholder="Şifre">
-    <button onclick="login()">SİSTEME GİRİŞ</button>
+    <button onclick="login()">GİRİŞ</button>
 </div>
 
 <div id="main-wrapper">
     <div id="playlist-container">
-        <h3 style="padding:15px; color:var(--red);">🎬 LİSTEM</h3>
+        <h3 style="padding:15px; color:var(--red); border-bottom:1px solid #333;">🎬 LİSTEM</h3>
         <div id="list-items"></div>
     </div>
     <div id="player-area">
-        <div id="yt-wrap" style="display:none; width:100%; height:100%;"><div id="yt-player"></div></div>
-        <video id="v-player" playsinline crossorigin="anonymous"></video>
+        <video id="v-player" playsinline crossorigin="anonymous" controls></video>
         <div class="controls">
-            <input type="range" style="width:100%; accent-color:red" id="seek" value="0" step="0.1">
-            <div style="display:flex; justify-content:space-between; margin-top:10px">
-                <button onclick="togglePlay()" id="playBtn">⏸ DURDUR</button>
-                <button onclick="toggleFS()" style="background:#333">⛶ TAM EKRAN</button>
-            </div>
+            <button onclick="toggleFS()" style="float:right; background:#333">⛶ TAM EKRAN</button>
         </div>
     </div>
 </div>
@@ -60,22 +54,23 @@
         projectId: "naberdeneme-ffa04"
     };
 
-    let ytPlayer, hls, isYT = false;
-    const video = document.getElementById('v-player');
-    const status = document.getElementById('status-bar');
+    let hls, video = document.getElementById('v-player');
 
-    function log(msg, color="#0f0") { status.innerText = msg; status.style.color = color; }
+    function log(msg, col="#0f0") { 
+        document.getElementById('status-bar').innerText = msg; 
+        document.getElementById('status-bar').style.color = col;
+    }
 
     function login() {
         if(document.getElementById('passInp').value === "755654") {
             document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('main-wrapper').style.display = 'block';
             if(!firebase.apps.length) firebase.initializeApp(fbConfig);
-            loadList();
-        } else { alert("Şifre Hatalı!"); }
+            loadData();
+        } else { alert("Şifre Yanlış!"); }
     }
 
-    function loadList() {
+    function loadData() {
         firebase.database().ref('ozel_videolar').on('value', s => {
             const container = document.getElementById('list-items');
             container.innerHTML = "";
@@ -84,84 +79,46 @@
                 const div = document.createElement('div');
                 div.className = 'playlist-item';
                 div.innerHTML = `<b>${item.title}</b>`;
-                div.onclick = () => playNow(item);
+                div.onclick = () => startStream(item.v_url);
                 container.appendChild(div);
             });
         });
     }
 
-    async function playNow(data) {
-        log("Yükleniyor...");
-        if(hls) { hls.destroy(); hls = null; }
-        video.pause(); video.src = "";
-        isYT = data.v_url.includes('youtube.com') || data.v_url.includes('youtu.be');
+    function startStream(url) {
+        log("Bağlantı Kuruluyor...");
+        if(hls) hls.destroy();
 
-        if(isYT) {
-            document.getElementById('yt-wrap').style.display = 'block';
-            video.style.display = 'none';
-            const id = data.v_url.split('v=')[1]?.split('&')[0] || data.v_url.split('embed/')[1];
-            if(!ytPlayer) {
-                ytPlayer = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:id, playerVars:{'autoplay':1} });
-            } else { ytPlayer.loadVideoById(id); }
-        } else {
-            document.getElementById('yt-wrap').style.display = 'none';
-            video.style.display = 'block';
-
-            if (data.v_url.includes('.m3u8')) {
-                setupHLS(data.v_url);
-            } else {
-                video.src = data.v_url;
-                video.play();
-            }
-        }
-    }
-
-    function setupHLS(url) {
         if (Hls.isSupported()) {
-            // HLS Yapılandırmasını Güçlendiriyoruz
             hls = new Hls({
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 90
+                // Bazı m3u8 linklerinde hata payını artırır
+                maxBufferLength: 30,
+                maxMaxBufferLength: 600,
+                // Önemli: Sunucunun parçaları (segments) reddetmesini önlemek için
+                xhrSetup: function(xhr, url) {
+                    xhr.withCredentials = false;
+                }
             });
 
-            log("Manifest Okunuyor...");
+            // Proxy Zinciri: Eğer doğrudan açılmazsa Proxy deneyecek
             hls.loadSource(url);
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                log("Bağlantı Başarılı!");
+                log("YAYIN BAŞLADI");
                 video.play();
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            log("Ağ Hatası! Proxy Deneniyor...", "orange");
-                            // Eğer normal link başarısız olursa Proxy kullan
-                            if(!url.includes('corsproxy')) {
-                                const newUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
-                                hls.loadSource(newUrl);
-                            } else {
-                                log("Manifest Yüklenemedi. Link Geçersiz Olabilir.", "red");
-                            }
-                            break;
-                        default:
-                            hls.recoverMediaError();
-                            break;
-                    }
+                    log("Ağ Koruması Tespit Edildi, Bypass Deneniyor...", "orange");
+                    // PROXY BYPASS
+                    const proxyUrl = "https://worker-orange-water-1673.serdarkaraca.workers.dev/?" + url; 
+                    // Not: Bu örnek bir proxy worker'dır. Eğer çalışmazsa "https://cors-anywhere.herokuapp.com/" deneyebilirsiniz.
+                    hls.loadSource(proxyUrl);
                 }
             });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = url;
-            video.play();
         }
-    }
-
-    function togglePlay() {
-        if(isYT) { (ytPlayer.getPlayerState() === 1) ? ytPlayer.pauseVideo() : ytPlayer.playVideo(); }
-        else { video.paused ? video.play() : video.pause(); }
     }
 
     function toggleFS() {
