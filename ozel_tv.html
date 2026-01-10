@@ -2,89 +2,82 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Özel TV Pro - Altyazı Destekli</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Özel TV - Kesintisiz Oynatıcı</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
-        :root { --primary: #e50914; --bg: #000; --panel: #111; }
-        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+        :root { --red: #e50914; --dark: #000; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--dark); color: #fff; font-family: sans-serif; overflow: hidden; }
         
-        /* Giriş Ekranı */
-        #auth-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #auth-screen input { padding: 15px; font-size: 25px; text-align: center; border-radius: 10px; border: 2px solid var(--primary); background: #111; color: white; width: 250px; margin-bottom: 20px; }
+        /* Şifre Ekranı */
+        #auth-screen { position: fixed; inset: 0; background: var(--dark); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #auth-screen input { padding: 15px; font-size: 20px; text-align: center; border-radius: 8px; border: 2px solid var(--red); background: #111; color: #fff; margin-bottom: 20px; width: 200px; }
         
-        #main-player { display: none; }
+        #main-wrapper { display: none; width: 100%; height: 100%; position: relative; }
         
-        /* UI Kontrolleri */
-        .ui-hidden-active #playlist-container, .ui-hidden-active .controls-bar { opacity: 0; visibility: hidden; }
-        #playlist-container, .controls-bar { transition: all 0.5s ease; opacity: 1; visibility: visible; }
-        
-        #playlist-container { padding: 20px; height: 100vh; overflow-y: auto; width: 280px; background: var(--panel); position: fixed; left: 0; top: 0; z-index: 10; border-right: 1px solid #333; }
-        .playlist-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; outline: none; }
-        .playlist-item:focus, .playlist-item:hover { border-color: var(--primary); background: #222; }
-        
-        #player-main { margin-left: 280px; height: 100vh; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
-        .is-fullscreen #player-main { margin-left: 0; width: 100vw; }
-        .is-fullscreen #playlist-container { transform: translateX(-280px); }
-        
-        .media-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: none; }
-        video { width: 100%; height: 100%; object-fit: contain; outline: none; }
+        /* Sol Menü */
+        #playlist-container { width: 280px; height: 100%; background: #111; position: absolute; left: 0; top: 0; z-index: 100; border-right: 1px solid #333; overflow-y: auto; transition: transform 0.4s ease; }
+        .playlist-item { padding: 15px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.3s; }
+        .playlist-item:hover { background: #222; color: var(--red); }
 
-        /* Altyazı Tasarımı (Kritik) */
-        video::cue { background: rgba(0,0,0,0.8); color: #ffffff; font-size: 1.1em; font-weight: bold; }
+        /* Oynatıcı Alanı */
+        #player-area { position: absolute; left: 280px; right: 0; top: 0; bottom: 0; background: #000; transition: all 0.4s ease; display: flex; align-items: center; justify-content: center; }
+        .full-view #player-area { left: 0; }
+        .full-view #playlist-container { transform: translateX(-280px); }
 
-        .controls-bar { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.95)); padding: 40px 20px 25px; z-index: 20; }
-        input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer; height: 6px; }
-        
-        .row { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; flex-wrap: wrap; gap: 10px; }
-        .btn-group { display: flex; gap: 10px; align-items: center; }
-        
-        button { background: var(--primary); border: none; color: white; padding: 10px 18px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        button.secondary { background: #333; }
-        button.active { background: #2e7d32; border: 1px solid #fff; }
+        .media-container { width: 100%; height: 100%; position: relative; }
+        video { width: 100%; height: 100%; background: #000; object-fit: contain; }
+        iframe { width: 100%; height: 100%; border: none; }
 
-        .jump-box { display: flex; align-items: center; background: #222; border-radius: 5px; border: 1px solid #444; }
-        .jump-box input { background: transparent; border: none; color: white; width: 45px; text-align: center; padding: 8px; outline: none; }
+        /* Altyazı Stili */
+        video::cue { background: rgba(0,0,0,0.8); color: #fff; font-size: 18px; font-family: sans-serif; }
+
+        /* Kontrol Çubuğu */
+        .controls { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 40px 20px 20px; z-index: 200; opacity: 1; transition: opacity 0.5s; }
+        .ui-hidden .controls { opacity: 0; pointer-events: none; }
+        
+        .progress-bar { width: 100%; accent-color: var(--red); cursor: pointer; height: 6px; }
+        .btns { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+        button { background: var(--red); border: none; color: #fff; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .secondary-btn { background: #333; margin-left: 5px; }
+        
+        .jump-box { display: flex; background: #222; border-radius: 4px; overflow: hidden; margin: 0 10px; }
+        .jump-box input { width: 40px; background: none; border: none; color: #fff; text-align: center; }
     </style>
 </head>
-<body onmousemove="showUI()" onkeydown="showUI()">
+<body onmousemove="resetTimer()" onclick="resetTimer()">
 
 <div id="auth-screen">
-    <h1 style="color:var(--primary)">🌟 ÖZEL SİSTEM</h1>
-    <input type="password" id="tvPass" placeholder="Şifre">
-    <button onclick="verifyTV()">GİRİŞ YAP</button>
+    <h2 style="color:var(--red)">ERİŞİM KONTROLÜ</h2>
+    <input type="password" id="passInput" placeholder="Şifre">
+    <button onclick="checkAccess()">GİRİŞ</button>
 </div>
 
-<div id="main-player">
+<div id="main-wrapper">
     <div id="playlist-container">
-        <h3 style="color:var(--primary)">🎬 ÖZEL LİSTE</h3>
-        <div id="list-items">Yükleniyor...</div>
+        <h3 style="padding:15px; border-bottom:1px solid var(--red)">📺 ÖZEL KANAL</h3>
+        <div id="list"></div>
     </div>
 
-    <div id="player-main">
-        <div id="yt-layer" class="media-layer"><div id="yt-player"></div></div>
-        <div id="file-layer" class="media-layer">
-            <video id="mainVideo" playsinline crossorigin="anonymous" onclick="togglePlay()"></video>
-        </div>
-        
-        <div class="controls-bar">
-            <input type="range" id="progressBar" value="0" min="0" step="0.1" oninput="manualSeek(this.value)">
-            <div class="row">
-                <div class="btn-group">
-                    <button id="playBtn" onclick="togglePlay()">⏸ DURDUR</button>
-                    
-                    <div class="jump-box">
-                        <input type="number" id="minInput" placeholder="DK">
-                        <button onclick="jumpToMin()" style="background:#444; border-radius:0;">GİT</button>
+    <div id="player-area">
+        <div class="media-container">
+            <div id="yt-wrap" style="display:none; width:100%; height:100%;"><div id="yt-player"></div></div>
+            <video id="v-player" playsinline crossorigin="anonymous"></video>
+            
+            <div class="controls" id="controls">
+                <input type="range" class="progress-bar" id="seek" value="0" step="0.1">
+                <div class="btns">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="playPause()" id="pBtn">⏸ DURDUR</button>
+                        <div class="jump-box">
+                            <input type="number" id="jumpMin" placeholder="DK">
+                            <button onclick="jumpToTime()" style="background:#444;">GİT</button>
+                        </div>
+                        <button id="ccBtn" class="secondary-btn" onclick="toggleCC()" style="display:none;">CC: AÇIK</button>
                     </div>
-
-                    <button id="ccBtn" class="secondary" onclick="toggleCC()">CC: KAPALI</button>
-                </div>
-
-                <div class="btn-group">
-                    <button class="secondary" onclick="toggleFS()">⛶ TAM EKRAN</button>
+                    <button class="secondary-btn" onclick="toggleFullScreen()">⛶ TAM EKRAN</button>
                 </div>
             </div>
         </div>
@@ -92,150 +85,153 @@
 </div>
 
 <script>
-    const config = {
+    const fb = {
         apiKey: "AIzaSyDVS-jg8FkE9xuUfzlnYboKrqsHHTL3Bvo",
         databaseURL: "https://naberdeneme-ffa04-default-rtdb.firebaseio.com",
         projectId: "naberdeneme-ffa04"
     };
 
-    let ytPlayer, isYouTube = false, idleTimer;
-    const video = document.getElementById('mainVideo');
-    const bar = document.getElementById('progressBar');
+    let ytPlayer, isYT = false, hideTimer;
+    const v = document.getElementById('v-player');
+    const seek = document.getElementById('seek');
 
-    function verifyTV() {
-        if(document.getElementById('tvPass').value === "755654") {
-            document.getElementById('auth-screen').style.display = "none";
-            document.getElementById('main-player').style.display = "block";
-            if (!firebase.apps.length) firebase.initializeApp(config);
-            loadPlaylist();
-        } else { alert("Şifre Hatalı!"); }
+    function checkAccess() {
+        if(document.getElementById('passInput').value === "755654") {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('main-wrapper').style.display = 'block';
+            if(!firebase.apps.length) firebase.initializeApp(fb);
+            loadData();
+        } else { alert("Şifre Yanlış!"); }
     }
 
-    function showUI() {
-        clearTimeout(idleTimer);
-        document.body.classList.remove('ui-hidden-active');
-        idleTimer = setTimeout(() => {
-            const isPlaying = isYouTube ? (ytPlayer && ytPlayer.getPlayerState() === 1) : !video.paused;
-            if(isPlaying) document.body.classList.add('ui-hidden-active');
-        }, 5000);
+    function resetTimer() {
+        document.body.classList.remove('ui-hidden');
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+            const playing = isYT ? (ytPlayer?.getPlayerState() === 1) : !v.paused;
+            if(playing) document.body.classList.add('ui-hidden');
+        }, 4000);
     }
 
-    function loadPlaylist() {
-        firebase.database().ref('ozel_videolar').on('value', snap => {
-            const container = document.getElementById('list-items');
-            container.innerHTML = "";
-            snap.forEach(child => {
-                const v = child.val();
-                const div = document.createElement('div');
-                div.className = 'playlist-item';
-                div.tabIndex = "0";
-                div.innerHTML = `<b>${v.title}</b> ${v.vtt_url ? '<small>(CC)</small>' : ''}`;
-                div.onclick = () => playMedia(v);
-                container.appendChild(div);
+    function loadData() {
+        firebase.database().ref('ozel_videolar').on('value', s => {
+            const div = document.getElementById('list');
+            div.innerHTML = "";
+            s.forEach(child => {
+                const item = child.val();
+                const btn = document.createElement('div');
+                btn.className = 'playlist-item';
+                btn.innerHTML = `<b>${item.title}</b>`;
+                btn.onclick = () => startMedia(item);
+                div.appendChild(btn);
             });
         });
     }
 
-    function playMedia(v) {
-        // Temizlik
-        while (video.firstChild) video.removeChild(video.firstChild);
-        isYouTube = v.v_url.includes('youtube') || v.v_url.includes('youtu.be');
-        
-        if(isYouTube) {
-            document.getElementById('yt-layer').style.display = 'block';
-            document.getElementById('file-layer').style.display = 'none';
-            const vidId = v.v_url.split('v=')[1] || v.v_url.split('embed/')[1];
-            if(!ytPlayer) {
-                ytPlayer = new YT.Player('yt-player', {
-                    height: '100%', width: '100%',
-                    videoId: vidId,
-                    playerVars: { 'controls': 0, 'autoplay': 1, 'cc_load_policy': 1, 'rel':0 }
-                });
-            } else { ytPlayer.loadVideoById(vidId); }
-            document.getElementById('ccBtn').style.display = 'none'; // YouTube için buton pasif
-        } else {
-            document.getElementById('yt-layer').style.display = 'none';
-            document.getElementById('file-layer').style.display = 'block';
-            document.getElementById('ccBtn').style.display = 'block';
+    async function startMedia(data) {
+        // Sıfırla
+        while (v.firstChild) v.removeChild(v.firstChild);
+        v.pause();
+        isYT = data.v_url.includes('youtube') || data.v_url.includes('youtu.be');
 
-            if(v.vtt_url) {
+        if(isYT) {
+            document.getElementById('yt-wrap').style.display = 'block';
+            v.style.display = 'none';
+            const id = data.v_url.split('v=')[1] || data.v_url.split('embed/')[1];
+            if(!ytPlayer) {
+                ytPlayer = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:id, playerVars:{'controls':0, 'autoplay':1, 'cc_load_policy':1} });
+            } else { ytPlayer.loadVideoById(id); }
+            document.getElementById('ccBtn').style.display = 'none';
+        } else {
+            document.getElementById('yt-wrap').style.display = 'none';
+            v.style.display = 'block';
+            v.src = data.v_url;
+
+            if(data.vtt_url) {
+                document.getElementById('ccBtn').style.display = 'inline-block';
                 const track = document.createElement('track');
-                track.id = "main-track";
                 track.kind = 'captions';
                 track.label = 'Türkçe';
                 track.srclang = 'tr';
-                track.src = v.vtt_url;
                 track.default = true;
-                video.appendChild(track);
+
+                // CORS PROBLEMI İÇİN PROXY DENEMESİ
+                try {
+                    // Not: Bazı CDN'ler doğrudan fetch'e kapalı olabilir. Proxy adresini başına ekliyoruz.
+                    const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(data.vtt_url);
+                    const res = await fetch(proxyUrl);
+                    const blob = await res.blob();
+                    track.src = URL.createObjectURL(blob);
+                } catch(e) {
+                    console.warn("Proxy ile yüklenemedi, direkt link deneniyor...");
+                    track.src = data.v_url;
+                }
                 
-                // Altyazı durumunu butona yansıt
-                document.getElementById('ccBtn').className = "active";
-                document.getElementById('ccBtn').innerText = "CC: AÇIK";
-            } else {
-                document.getElementById('ccBtn').style.display = 'none';
+                v.appendChild(track);
             }
-
-            video.src = v.v_url;
-            video.load();
-            video.play().catch(e => console.log("Oynatma hatası:", e));
+            v.play();
         }
-        requestAnimationFrame(sync);
+        updateSync();
     }
 
-    // ALTYAZI AÇ/KAPAT FONKSİYONU
-    function toggleCC() {
-        if (video.textTracks && video.textTracks.length > 0) {
-            const track = video.textTracks[0];
-            const btn = document.getElementById('ccBtn');
-            
-            if (track.mode === 'showing') {
-                track.mode = 'hidden';
-                btn.className = "secondary";
-                btn.innerText = "CC: KAPALI";
-            } else {
-                track.mode = 'showing';
-                btn.className = "active";
-                btn.innerText = "CC: AÇIK";
-            }
-        }
-    }
-
-    function jumpToMin() {
-        const m = document.getElementById('minInput').value;
-        if(m !== "") manualSeek(m * 60);
-        document.getElementById('minInput').value = "";
-    }
-
-    function manualSeek(s) {
-        if(isYouTube) ytPlayer.seekTo(s); else video.currentTime = s;
-    }
-
-    function togglePlay() {
-        const playing = isYouTube ? (ytPlayer.getPlayerState() === 1) : !video.paused;
-        const btn = document.getElementById('playBtn');
-        if(playing) {
-            if(isYouTube) ytPlayer.pauseVideo(); else video.pause();
-            btn.innerText = "▶ OYNAT";
+    function playPause() {
+        if(isYT) {
+            ytPlayer.getPlayerState() === 1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
         } else {
-            if(isYouTube) ytPlayer.playVideo(); else video.play();
-            btn.innerText = "⏸ DURDUR";
+            v.paused ? v.play() : v.pause();
         }
-        showUI();
+        document.getElementById('pBtn').innerText = "İŞLEM YAPILIYOR...";
     }
 
-    function sync() {
-        try {
-            const cur = isYouTube ? (ytPlayer && ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0) : video.currentTime;
-            const dur = isYouTube ? (ytPlayer && ytPlayer.getDuration ? ytPlayer.getDuration() : 0) : video.duration;
-            if(dur > 0) { bar.max = dur; bar.value = cur; }
-        } catch(e) {}
-        requestAnimationFrame(sync);
+    function jumpToTime() {
+        const m = document.getElementById('jumpMin').value;
+        if(m) {
+            const s = m * 60;
+            isYT ? ytPlayer.seekTo(s) : (v.currentTime = s);
+        }
     }
 
-    function toggleFS() {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
+    function updateSync() {
+        const cur = isYT ? ytPlayer?.getCurrentTime() : v.currentTime;
+        const dur = isYT ? ytPlayer?.getDuration() : v.duration;
+        if(dur) { seek.max = dur; seek.value = cur; }
+        
+        // Buton Metni Güncelleme
+        const playing = isYT ? (ytPlayer?.getPlayerState() === 1) : !v.paused;
+        document.getElementById('pBtn').innerText = playing ? "⏸ DURDUR" : "▶ OYNAT";
+        
+        requestAnimationFrame(updateSync);
     }
+
+    function toggleCC() {
+        const t = v.textTracks[0];
+        if(t) {
+            t.mode = (t.mode === 'showing') ? 'hidden' : 'showing';
+            document.getElementById('ccBtn').innerText = `CC: ${t.mode === 'showing' ? 'AÇIK' : 'KAPALI'}`;
+        }
+    }
+
+    function toggleFullScreen() {
+        const doc = document.documentElement;
+        const area = document.body;
+        
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (doc.requestFullscreen) doc.requestFullscreen();
+            else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen();
+            area.classList.add('full-view');
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            area.classList.remove('full-view');
+        }
+    }
+
+    // İlerleme çubuğundan kaydırma
+    seek.oninput = () => {
+        const val = seek.value;
+        isYT ? ytPlayer.seekTo(val) : (v.currentTime = val);
+    };
+
 </script>
 </body>
 </html>
